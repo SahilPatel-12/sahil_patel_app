@@ -218,18 +218,33 @@ export default function SettingsDetailScreen() {
 
   const fetchTempleCatalog = async () => {
     try {
-      const { data, error } = await supabase
+      const mapping: Record<string, string> = {};
+
+      // Fetch from general_poojas
+      const { data: generalData } = await supabase
+        .from('general_poojas')
+        .select('id, temple');
+      if (generalData) {
+        generalData.forEach(item => {
+          if (item.temple) {
+            mapping[item.id] = item.temple;
+          }
+        });
+      }
+
+      // Fetch from website_pooja_products
+      const { data: webData } = await supabase
         .from('website_pooja_products')
         .select('id, temple_association');
-      if (!error && data) {
-        const mapping: Record<string, string> = {};
-        data.forEach(item => {
+      if (webData) {
+        webData.forEach(item => {
           if (item.temple_association) {
             mapping[item.id] = item.temple_association;
           }
         });
-        setTempleCatalog(mapping);
       }
+
+      setTempleCatalog(mapping);
     } catch (err) {
       console.error('Error fetching temple catalog:', err);
     }

@@ -157,11 +157,10 @@ export default function GodScreen() {
   async function playBellSound() {
     try {
       if (bellPlayer) {
-        if (bellPlayer.isLoaded) {
-          await bellPlayer.seekTo(0).catch(err => {
-            console.log('[GodScreen] Error seeking bell player:', err);
-          });
-        }
+        // Seek to start to allow replay on subsequent taps
+        await bellPlayer.seekTo(0).catch(err => {
+          console.log('[GodScreen] Error seeking bell player:', err);
+        });
         bellPlayer.play();
       }
     } catch (error) {

@@ -126,7 +126,7 @@ const FALLBACK_PUJAS = [
   }
 ];
 
-const PROBLEM_CATEGORIES = ['Health', 'Wealth', 'Job & Career', 'Marriage & Love', 'Grah Dosh'];
+const PROBLEM_CATEGORIES = ['Health', 'Wealth', 'Job & Career', 'Marriage & Love', 'Grah Dosh', 'Education'];
 
 export default function ProblemPujasScreen() {
   const { t } = useLanguage();
@@ -142,6 +142,7 @@ export default function ProblemPujasScreen() {
     if (normalized.includes('job') || normalized.includes('career')) return 'Job & Career';
     if (normalized.includes('marriage') || normalized.includes('love')) return 'Marriage & Love';
     if (normalized.includes('grah') || normalized.includes('dosh') || normalized.includes('shanti')) return 'Grah Dosh';
+    if (normalized.includes('education') || normalized.includes('focus') || normalized.includes('study') || normalized.includes('exam')) return 'Education';
     return 'Health';
   };
 
@@ -157,6 +158,7 @@ export default function ProblemPujasScreen() {
     if (norm.includes('job') || norm.includes('career')) return 'Job & Career';
     if (norm.includes('marriage') || norm.includes('love')) return 'Marriage & Love';
     if (norm.includes('grah') || norm.includes('dosh') || norm.includes('shanti')) return 'Grah Dosh';
+    if (norm.includes('education') || norm.includes('focus') || norm.includes('study') || norm.includes('exam')) return 'Education';
     return title;
   };
 

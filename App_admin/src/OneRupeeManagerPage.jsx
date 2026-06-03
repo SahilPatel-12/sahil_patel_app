@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Edit3, Trash2, Check, AlertTriangle, Upload, Loader2, Save, Send, Plus, X, ArrowLeft, ShoppingCart, Search, Share2, Star, ChevronDown, ChevronUp, Bell } from 'lucide-react';
 import { supabase } from './lib/supabase';
-import { uploadToR2 } from './lib/r2';
+import { uploadToR2, deleteFromR2 } from './lib/r2';
 
 // --- Default Images --- //
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1609137144814-6c3614275f7e?auto=format&fit=crop&w=600&q=80';
@@ -901,10 +901,23 @@ const OneRupeeManagerPage = () => {
     try {
       const isUuid = id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
       if (isUuid) {
+        // Find the puja item to delete its images before deleting the row
+        const poojaToDelete = poojas.find(p => p.id === id);
+
         const { error: delErr } = await supabase.from('one_rupee_poojas').delete().eq('id', id);
         if (delErr) throw delErr;
+
+        // Clean up Cloudflare R2 images if database delete succeeded
+        if (poojaToDelete) {
+          if (poojaToDelete.image_url) {
+            await deleteFromR2(poojaToDelete.image_url);
+          }
+          if (poojaToDelete.combo_offer && poojaToDelete.combo_offer.image_url) {
+            await deleteFromR2(poojaToDelete.combo_offer.image_url);
+          }
+        }
       }
-      showMessage('Pooja deleted successfully!');
+      showMessage('Pooja deleted successfully from Supabase and Cloudflare R2!');
       fetchPoojas();
     } catch (err) {
       showMessage(err.message, true);

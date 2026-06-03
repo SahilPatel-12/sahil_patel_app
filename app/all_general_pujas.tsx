@@ -6,8 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
-  StatusBar,
-  ActivityIndicator
+  StatusBar
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,7 +17,6 @@ import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../services/supabase';
 
 const { width } = Dimensions.get('window');
-// Mathematically calculate precise 3-column layout subtracting sub-pixel safety margins
 const CARD_WIDTH = Math.floor((width - 32 - 20) / 3) - 1.5;
 
 const PUJAS_DATA = [
@@ -60,113 +58,36 @@ const PUJAS_DATA = [
     description: 'by Omkareshwar Dham',
     category: 'Mahadev',
     provider: 'Omkareshwar Dham'
-  },
-  {
-    id: '4',
-    title: 'Hanuman Puja',
-    image: require('../assets/God/Mahakal Ujjain.png'),
-    rating: '4.9',
-    reviews: '230',
-    time: '45 mins',
-    price: '₹251',
-    originalPrice: '₹799',
-    description: 'by Bajrang Dham',
-    category: 'Protection',
-    provider: 'Bajrang Dham'
-  },
-  {
-    id: '5',
-    title: 'Kedarnath Puja',
-    image: require('../assets/God/Kedarnath.png'),
-    rating: '4.8',
-    reviews: '310',
-    time: '45 mins',
-    price: '₹351',
-    originalPrice: '₹999',
-    description: 'by Kedarnath Dham Priests',
-    category: 'Mahadev',
-    provider: 'Kedarnath Dham'
-  },
-  {
-    id: '6',
-    title: 'Tirupati Puja',
-    image: require('../assets/God/Lord Venkateswara Images Full Hd Wallpaper 1.png'),
-    rating: '5.0',
-    reviews: '420',
-    time: '120 mins',
-    price: '₹2,100',
-    originalPrice: '₹5,100',
-    description: 'by Tirumala Devasthanam',
-    category: 'Wealth',
-    provider: 'Tirumala Devasthanam'
-  },
-  {
-    id: '7',
-    title: 'Shanti Path',
-    image: require('../assets/God/god1.png'),
-    rating: '4.9',
-    reviews: '150',
-    time: '30 mins',
-    price: '₹151',
-    originalPrice: '₹499',
-    description: 'by Haridwar Acharyas',
-    category: 'Peace',
-    provider: 'Haridwar Acharyas'
-  },
-  {
-    id: '8',
-    title: 'Navgrah Homa',
-    image: require('../assets/God/_ (5).jpeg'),
-    rating: '4.7',
-    reviews: '175',
-    time: '90 mins',
-    price: '₹1,500',
-    originalPrice: '₹4,500',
-    description: 'by Kashi Vedic Pandits',
-    category: 'Protection',
-    provider: 'Kashi Vedic Pandits'
   }
 ];
 
-export default function AllPujasScreen() {
+export default function AllGeneralPujasScreen() {
   const { t } = useLanguage();
   const { cart, handleAddToCart, handleIncrement, handleDecrement, totalCartCount } = useCart();
   const [selectedCategory, setSelectedCategory] = React.useState('All');
   const [generalPujas, setGeneralPujas] = React.useState<any[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [viewAllSettings, setViewAllSettings] = React.useState({
-    banner_image: 'https://pub-3027d8d3defe4496978413d3c630aa44.r2.dev/banner/ChatGPT Image May 26, 2026, 12_19_59 PM.png',
-    title: 'Store',
-    heading: 'ALL',
-    subheading: 'Pure Vedic Seva + Divine Blessings'
-  });
 
   React.useEffect(() => {
-    async function loadData() {
-      setIsLoading(true);
-      await Promise.all([loadGeneralPoojas(), loadSettings()]);
-      setIsLoading(false);
-    }
-
     async function loadGeneralPoojas() {
       try {
         const { data, error } = await supabase
-          .from('website_pooja_products')
+          .from('general_poojas')
           .select('*')
-          .eq('is_published', true)
+          .eq('status', 'published')
+          .eq('is_active', true)
           .order('created_at', { ascending: false });
         if (error) throw error;
         if (data) {
           const formatted = data.map(p => ({
             id: p.id,
-            title: p.name,
-            originalPrice: p.original_price ? '₹' + p.original_price : '',
-            price: p.price ? '₹' + p.price : '',
-            rating: p.rating ? String(p.rating) : '5.0',
-            reviews: p.reviews_count ? String(p.reviews_count) : '0',
-            provider: p.temple_association || 'Vedic Shrine',
+            title: p.title,
+            originalPrice: p.original_price || '',
+            price: p.offer_price || '',
+            rating: p.rating || '5.0',
+            reviews: p.reviews || '0',
+            provider: p.provider || 'Vedic Shrine',
             category: p.category || 'All',
-            image: p.image || 'https://pub-3027d8d3defe4496978413d3c630aa44.r2.dev/god.png',
+            image: p.image_url || 'https://pub-3027d8d3defe4496978413d3c630aa44.r2.dev/god.png',
           }));
           setGeneralPujas(formatted);
         }
@@ -175,48 +96,19 @@ export default function AllPujasScreen() {
       }
     }
 
-    async function loadSettings() {
-      try {
-        const { data, error } = await supabase
-          .from('website_settings')
-          .select('value')
-          .eq('key', 'view_all_settings')
-          .maybeSingle();
-        if (error) throw error;
-        if (data && data.value) {
-          setViewAllSettings(data.value);
-        }
-      } catch (err) {
-        console.error('[All Pujas Grid] Error loading view_all_settings:', err);
-      }
-    }
-
-    loadData();
+    loadGeneralPoojas();
 
     // Live sync automatic reloading via Supabase Realtime channel
     const productsSubscription = supabase
       .channel('all_general_poojas_sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'website_pooja_products' }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'general_poojas' }, (payload) => {
         console.log('[All Pujas Grid] Realtime event caught, auto-reloading general grid...', payload);
         loadGeneralPoojas();
       })
       .subscribe();
 
-    // Live sync for website_settings changes
-    const settingsSubscription = supabase
-      .channel('website_settings_sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'website_settings' }, (payload) => {
-        console.log('[All Pujas Grid] Realtime settings event caught:', payload);
-        const newRecord = payload.new as any;
-        if (newRecord && newRecord.key === 'view_all_settings' && newRecord.value) {
-          setViewAllSettings(newRecord.value);
-        }
-      })
-      .subscribe();
-
     return () => {
       supabase.removeChannel(productsSubscription);
-      supabase.removeChannel(settingsSubscription);
     };
   }, []);
 
@@ -242,7 +134,7 @@ export default function AllPujasScreen() {
     ? activeGeneralPujas
     : activeGeneralPujas.filter(item => item.category === selectedCategory);
 
-  const renderProductCard = (item: typeof PUJAS_DATA[0]) => {
+  const renderProductCard = (item: any) => {
     const quantityInCart = cart[item.id] || 0;
     return (
       <TouchableOpacity
@@ -257,7 +149,7 @@ export default function AllPujasScreen() {
         {/* Image Container with Floating '+' Button */}
         <View style={styles.productImageContainer}>
           <Image
-            source={item.image}
+            source={typeof item.image === 'number' ? item.image : { uri: item.image }}
             style={styles.productImage}
             contentFit="cover"
           />
@@ -340,11 +232,7 @@ export default function AllPujasScreen() {
       <View style={styles.headerContainer}>
         {/* Full-width Banner Image */}
         <Image
-          source={
-            viewAllSettings.banner_image && viewAllSettings.banner_image.startsWith('http')
-              ? { uri: viewAllSettings.banner_image }
-              : require('../assets/banner/ChatGPT Image May 26, 2026, 12_19_59 PM.png')
-          }
+          source={require('../assets/banner/ChatGPT Image May 26, 2026, 12_19_59 PM.png')}
           style={styles.bannerImage}
           contentFit="cover"
         />
@@ -396,30 +284,15 @@ export default function AllPujasScreen() {
         <View style={styles.sectionHeader}>
           <View style={styles.storeLogoContainer}>
             <View style={styles.storeLogoBadge}>
-              <Text style={styles.storeLogoText}>{viewAllSettings.heading || 'ALL'}</Text>
+              <Text style={styles.storeLogoText}>ALL</Text>
             </View>
-            <Text style={styles.storeLogoTitle}>{t(viewAllSettings.title || 'pujas')}</Text>
+            <Text style={styles.storeLogoTitle}>{t('pujas')}</Text>
           </View>
           <View style={styles.storeSubHeader}>
             <Ionicons name="checkmark-circle" size={13} color="#ea580c" style={styles.checkmarkIcon} />
             <Text style={styles.storeSubHeaderText}>
-              {viewAllSettings.subheading ? (
-                viewAllSettings.subheading.includes('+') ? (
-                  <>
-                    {t(viewAllSettings.subheading.split('+')[0])}
-                    <Text style={styles.storeSubHeaderTextOrange}>
-                      {'+' + t(viewAllSettings.subheading.split('+')[1])}
-                    </Text>
-                  </>
-                ) : (
-                  t(viewAllSettings.subheading)
-                )
-              ) : (
-                <>
-                  {t('Pure Vedic Seva ')}
-                  <Text style={styles.storeSubHeaderTextOrange}>{t('+ Divine Blessings')}</Text>
-                </>
-              )}
+              {t('Pure Vedic Seva ')}
+              <Text style={styles.storeSubHeaderTextOrange}>{t('+ Divine Blessings')}</Text>
             </Text>
           </View>
         </View>
@@ -445,30 +318,14 @@ export default function AllPujasScreen() {
           ))}
         </ScrollView>
 
-        {isLoading ? (
-          <View style={{ flex: 1, paddingVertical: 100, justifyContent: 'center', alignItems: 'center' }}>
-            <ActivityIndicator size="large" color="#ea580c" />
-            <Text style={{ marginTop: 12, fontSize: 13, fontFamily: 'Outfit-Medium', color: '#64748b' }}>
-              {t('Loading products...')}
-            </Text>
-          </View>
-        ) : filteredItems.length === 0 ? (
-          <View style={{ padding: 20, alignItems: 'center' }}><Text>{t('No products found.')}</Text></View>
+        {filteredItems.length === 0 ? (
+          <View style={{ padding: 20, alignItems: 'center' }}><Text>No Pujas found.</Text></View>
         ) : (
           <View style={styles.gridContainer}>
             {filteredItems.map((item) => renderProductCard(item))}
           </View>
         )}
       </ScrollView>
-
-      {/* Floating Free Delivery Footer */}
-      <View style={styles.footerContainer}>
-        <View style={styles.footerInner}>
-          <Text style={styles.footerText}>
-            <Text style={styles.footerTextBold}>{t('FREE DELIVERY')}</Text>{t(' on orders above ')}<Text style={styles.footerTextBold}>₹149</Text>
-          </Text>
-        </View>
-      </View>
     </View>
   );
 }
@@ -585,7 +442,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Outfit-Bold',
     color: '#000000',
-    textTransform: 'lowercase',
   },
   storeSubHeader: {
     flexDirection: 'row',
@@ -623,7 +479,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 6,
     borderWidth: 1,
-    borderColor: '#fed7aa', // Premium soft saffron border
+    borderColor: '#fed7aa',
     position: 'relative',
   },
   productImage: {
@@ -636,8 +492,8 @@ const styles = StyleSheet.create({
     right: 5,
     width: 22,
     height: 22,
-    borderRadius: 11, // Perfectly rounded circular button
-    backgroundColor: '#ea580c', // Solid vibrant saffron background
+    borderRadius: 11,
+    backgroundColor: '#ea580c',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#ea580c',
@@ -660,7 +516,7 @@ const styles = StyleSheet.create({
     borderRightWidth: 1.5,
     borderBottomWidth: 1.5,
     borderTopWidth: 0,
-    borderColor: '#f97316', // Saffron U-shaped Chandan
+    borderColor: '#f97316',
     borderBottomLeftRadius: 5,
     borderBottomRightRadius: 5,
     justifyContent: 'center',
@@ -672,7 +528,7 @@ const styles = StyleSheet.create({
     width: 3.5,
     height: 5,
     borderRadius: 1.75,
-    backgroundColor: '#dc2626', // Sacred red Kumkum vermilion dot
+    backgroundColor: '#dc2626',
     marginTop: -1,
   },
   itemTitle: {
@@ -712,7 +568,7 @@ const styles = StyleSheet.create({
     color: '#000000',
   },
   ratingBadge: {
-    backgroundColor: '#fff7ed', // Soft warm amber background
+    backgroundColor: '#fff7ed',
     alignSelf: 'flex-start',
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -724,55 +580,25 @@ const styles = StyleSheet.create({
   ratingText: {
     fontSize: 8.5,
     fontFamily: 'Outfit-Bold',
-    color: '#ea580c', // Bright saffron star/rating color
+    color: '#ea580c',
   },
   cardDivider: {
     width: 20,
     height: 1.5,
-    backgroundColor: '#fed7aa', // Beautiful warm saffron divider
+    backgroundColor: '#fed7aa',
     marginBottom: 4,
     borderRadius: 1,
   },
   providerText: {
     fontSize: 9,
     fontFamily: 'Outfit-SemiBold',
-    color: '#c2410c', // Elegant deep orange-700 for sacred temple name
-  },
-  footerContainer: {
-    position: 'absolute',
-    bottom: 24, // Center-floats 24px above the bottom of the screen
-    left: 20, // 20px margins on the sides
-    right: 20,
-    backgroundColor: '#f0fdfa', // Extremely soft pastel cyan/teal background
-    borderWidth: 1,
-    borderColor: '#ccfbf1', // Light cyan border
-    borderRadius: 30, // Fully rounded pill shape
-    shadowColor: '#0f766e',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  footerInner: {
-    paddingVertical: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  footerText: {
-    fontSize: 11,
-    fontFamily: 'Outfit-Medium',
-    color: '#0f766e', // Deep rich teal text
-    letterSpacing: 0.2,
-  },
-  footerTextBold: {
-    fontFamily: 'Outfit-Bold',
-    color: '#0d9488', // Highlighted teal bold text
+    color: '#c2410c',
   },
   cartBadge: {
     position: 'absolute',
     top: -4,
     right: -4,
-    backgroundColor: '#ef4444', // Red badge
+    backgroundColor: '#ef4444',
     borderRadius: 8,
     width: 15,
     height: 15,
@@ -793,7 +619,7 @@ const styles = StyleSheet.create({
     width: 58,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#ea580c', // Solid vibrant saffron background
+    backgroundColor: '#ea580c',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

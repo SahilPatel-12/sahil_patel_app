@@ -37,7 +37,6 @@ import OneRupeeManagerPage from './OneRupeeManagerPage'
 import GeneralPoojasManagerPage from './GeneralPoojasManagerPage'
 import WebsiteProductsManagerPage from './WebsiteProductsManagerPage'
 import ProblemSolutionsManagerPage from './ProblemSolutionsManagerPage'
-import ComboPoojasManagerPage from './ComboPoojasManagerPage'
 import OfferSectionsManagerPage from './OfferSectionsManagerPage'
 import DailyRitualsManagerPage from './DailyRitualsManagerPage'
 import OrdersManagerPage from './OrdersManagerPage'
@@ -65,7 +64,6 @@ const Sidebar = ({ onLogout }) => {
     { name: 'Vedic Pujas', path: '/general-poojas', icon: <Package size={20} /> },
     { name: 'Website Products', path: '/website-products', icon: <Package size={20} /> },
     { name: 'Problem Solutions', path: '/problem-solutions', icon: <Activity size={20} /> },
-    { name: 'Combo Pujas', path: '/combo-poojas', icon: <Package size={20} /> },
     { name: 'Offer Sections', path: '/offer-sections', icon: <Layers size={20} /> },
     { name: 'Daily Rituals', path: '/daily-rituals', icon: <Calendar size={20} /> },
     { name: 'Analytics', path: '/analytics', icon: <BarChart3 size={20} /> },
@@ -1590,7 +1588,6 @@ function App() {
             <Route path="/general-poojas" element={<GeneralPoojasManagerPage />} />
             <Route path="/website-products" element={<WebsiteProductsManagerPage />} />
             <Route path="/problem-solutions" element={<ProblemSolutionsManagerPage />} />
-            <Route path="/combo-poojas" element={<ComboPoojasManagerPage />} />
             <Route path="/offer-sections" element={<OfferSectionsManagerPage />} />
             <Route path="/daily-rituals" element={<DailyRitualsManagerPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />

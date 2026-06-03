@@ -1387,6 +1387,7 @@ const ProblemSolutionsManagerPage = () => {
                             <option value="Job & Career">Job & Career</option>
                             <option value="Marriage & Love">Marriage & Love</option>
                             <option value="Grah Dosh">Grah Dosh & Shanti</option>
+                            <option value="Education">Education & Focus</option>
                           </select>
                         </div>
                         <div className="form-group">

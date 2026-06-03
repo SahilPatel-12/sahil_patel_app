@@ -1817,19 +1817,34 @@ export default function PujaDetailScreen() {
         
         let dbData = oneRupeeData;
         
-        // If not found in one_rupee_poojas, check website_pooja_products
+        // If not found in one_rupee_poojas, check general_poojas
         if (!dbData) {
-          console.log('[Puja Detail] Checking website_pooja_products fallback...');
+          console.log('[Puja Detail] Checking general_poojas fallback...');
           const { data: generalData, error: generalError } = await supabase
-            .from('website_pooja_products')
+            .from('general_poojas')
             .select('*')
             .eq('id', pujaId)
             .maybeSingle();
           
           if (generalError) {
-            console.error('[Puja Detail] Error loading from website_pooja_products:', generalError);
+            console.error('[Puja Detail] Error loading from general_poojas:', generalError);
           }
           dbData = generalData;
+        }
+
+        // If not found in general_poojas, check website_pooja_products
+        if (!dbData) {
+          console.log('[Puja Detail] Checking website_pooja_products fallback...');
+          const { data: websiteData, error: websiteError } = await supabase
+            .from('website_pooja_products')
+            .select('*')
+            .eq('id', pujaId)
+            .maybeSingle();
+          
+          if (websiteError) {
+            console.error('[Puja Detail] Error loading from website_pooja_products:', websiteError);
+          }
+          dbData = websiteData;
         }
 
         // If not found in website_pooja_products, check problem_poojas
@@ -1938,7 +1953,6 @@ export default function PujaDetailScreen() {
 
   // State Management
   const [isBookmarked, setIsBookmarked] = useState(false);
-  const [selectedPackage, setSelectedPackage] = useState<'single' | 'family'>('single');
   const { cart, handleAddToCart, handleIncrement, handleDecrement, totalCartCount } = useCart();
 
   // Accordion states
@@ -1973,13 +1987,9 @@ export default function PujaDetailScreen() {
   const quantity = quantityInCart || 1;
 
   // Pricing calculations
-  const isSingle = selectedPackage === 'single';
-  const offerPriceVal = isSingle
-    ? (puja.singlePrice ? parseInt(puja.singlePrice.replace(/[^0-9]/g, ''), 10) : parseInt(puja.offerPrice?.replace(/[^0-9]/g, '') || '0', 10))
-    : (puja.familyPrice ? parseInt(puja.familyPrice.replace(/[^0-9]/g, ''), 10) : parseInt(puja.offerPrice?.replace(/[^0-9]/g, '') || '0', 10) * 2);
-  const originalPriceVal = isSingle
-    ? (puja.singleOriginalPrice ? parseInt(puja.singleOriginalPrice.replace(/[^0-9]/g, ''), 10) : parseInt(puja.originalPrice?.replace(/[^0-9]/g, '') || '0', 10))
-    : (puja.familyOriginalPrice ? parseInt(puja.familyOriginalPrice.replace(/[^0-9]/g, ''), 10) : parseInt(puja.originalPrice?.replace(/[^0-9]/g, '') || '0', 10) * 2);
+  const isSingle = true;
+  const offerPriceVal = puja.singlePrice ? parseInt(puja.singlePrice.replace(/[^0-9]/g, ''), 10) : parseInt(puja.offerPrice?.replace(/[^0-9]/g, '') || '0', 10);
+  const originalPriceVal = puja.singleOriginalPrice ? parseInt(puja.singleOriginalPrice.replace(/[^0-9]/g, ''), 10) : parseInt(puja.originalPrice?.replace(/[^0-9]/g, '') || '0', 10);
   const discountPercent = 99; // Standard high promotional Vedic discount
 
   return (
@@ -2115,58 +2125,7 @@ export default function PujaDetailScreen() {
             <Text style={styles.reviewsCountText}>{puja.reviews} {t('blessed devotees joined')}</Text>
           </View>
 
-          {/* Premium Puja Package Selector */}
-          <View style={styles.packageContainer}>
-            <Text style={styles.packageHeaderLabel}>{t('SELECT RITUAL LEVEL')}</Text>
 
-            <View style={styles.packageCardRow}>
-              {/* Option 1: Individual / Single Devotee Package */}
-              <TouchableOpacity
-                style={[
-                  styles.packagePill,
-                  isSingle && styles.packagePillActive
-                ]}
-                onPress={() => setSelectedPackage('single')}
-                activeOpacity={0.9}
-              >
-                <View style={styles.pillHeaderRow}>
-                  <Text style={[styles.pillTitle, isSingle && styles.pillTextActive]}>{puja.singleTitle || t('Single Sankalp')}</Text>
-                  <View style={[styles.radioCircle, isSingle && styles.radioCircleActive]}>
-                    {isSingle && <View style={styles.radioDot} />}
-                  </View>
-                </View>
-                <Text style={styles.pillDesc}>{puja.singleDescription || t('Individual name & gotra Sankalp + Holy Prasad transit box.')}</Text>
-                <View style={styles.pillDivider} />
-                <View style={styles.pillPriceRow}>
-                  <Text style={[styles.pillPrice, isSingle && styles.pillTextActive]}>{puja.singlePrice || ('₹' + puja.offerPrice)}</Text>
-                  <Text style={styles.pillOriginalPrice}>{puja.singleOriginalPrice || puja.originalPrice}</Text>
-                </View>
-              </TouchableOpacity>
-
-              {/* Option 2: Full Family / Pariwar Auspicious Package */}
-              <TouchableOpacity
-                style={[
-                  styles.packagePill,
-                  !isSingle && styles.packagePillActive
-                ]}
-                onPress={() => setSelectedPackage('family')}
-                activeOpacity={0.9}
-              >
-                <View style={styles.pillHeaderRow}>
-                  <Text style={[styles.pillTitle, !isSingle && styles.pillTextActive]}>{puja.familyTitle || t('Family Pariwar')}</Text>
-                  <View style={[styles.radioCircle, !isSingle && styles.radioCircleActive]}>
-                    {!isSingle && <View style={styles.radioDot} />}
-                  </View>
-                </View>
-                <Text style={styles.pillDesc}>{puja.familyDescription || t('Full household (4 names) Sankalps + Consecrated copper yantra shield.')}</Text>
-                <View style={styles.pillDivider} />
-                <View style={styles.pillPriceRow}>
-                  <Text style={[styles.pillPrice, !isSingle && styles.pillTextActive]}>{puja.familyPrice || ('₹' + (parseInt(puja.offerPrice.replace(/[^0-9]/g, ''), 10) * 2))}</Text>
-                  <Text style={styles.pillOriginalPrice}>{puja.familyOriginalPrice || ('₹' + (parseInt(puja.originalPrice.replace(/[^0-9]/g, ''), 10) * 2))}</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-          </View>
 
           {/* Combined Pricing & Dynamic Quantity Row */}
           <View style={styles.pricingCardBlock}>
@@ -2211,43 +2170,16 @@ export default function PujaDetailScreen() {
             </View>
           </View>
 
-          {/* Combo Special Offer Card */}
-          {puja.combo_offer && puja.combo_offer.title && (
-            <View style={{ marginBottom: 24, marginTop: 12 }}>
-              <Text style={{ margin: 0, marginBottom: 12, fontSize: 11, fontWeight: '700', color: '#94a3b8', letterSpacing: 0.5 }}>
-                {t('COMBO SPECIAL OFFER')}
-              </Text>
-              <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 }}>
-                {puja.combo_offer.image_url && (
-                  <Image source={{ uri: puja.combo_offer.image_url }} style={{ width: '100%', height: 140 }} contentFit="cover" />
-                )}
-                <View style={{ padding: 16 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                    <Text style={{ margin: 0, fontSize: 15, fontWeight: '700', color: '#0f172a', flex: 1 }}>{puja.combo_offer.title}</Text>
-                    <View style={{ backgroundColor: '#ea580c', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 4, marginLeft: 10 }}>
-                      <Text style={{ color: 'white', fontSize: 9, fontWeight: 'bold' }}>{t('SAVE BUNDLE')}</Text>
-                    </View>
-                  </View>
-                  <Text style={{ margin: 0, marginBottom: 12, fontSize: 12, color: '#64748b', lineHeight: 18 }}>
-                    {puja.combo_offer.description}
-                  </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontSize: 18, fontWeight: '800', color: '#ea580c' }}>{puja.combo_offer.offer_price}</Text>
-                    <Text style={{ fontSize: 13, color: '#94a3b8', textDecorationLine: 'line-through' }}>{puja.combo_offer.original_price}</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-          )}
 
-          {/* 1. Divine Benefits of Combo Accordion */}
+
+          {/* 1. Divine Benefits Accordion */}
           <View style={styles.accordionCard}>
             <TouchableOpacity
               style={styles.accordionHeader}
               onPress={() => toggleSection('benefits')}
               activeOpacity={0.7}
             >
-              <Text style={styles.accordionHeaderTitle}>{t('Divine Combined Benefits')}</Text>
+              <Text style={styles.accordionHeaderTitle}>{t('Divine Benefits')}</Text>
               <Ionicons
                 name={expandedSection === 'benefits' ? "chevron-up" : "chevron-down"}
                 size={18}
@@ -2262,14 +2194,14 @@ export default function PujaDetailScreen() {
             )}
           </View>
 
-          {/* 2. What's included in this Combo Accordion */}
+          {/* 2. What's included in this Puja Accordion */}
           <View style={styles.accordionCard}>
             <TouchableOpacity
               style={styles.accordionHeader}
               onPress={() => toggleSection('details')}
               activeOpacity={0.7}
             >
-              <Text style={styles.accordionHeaderTitle}>{t('Combo Ritual steps & Materials')}</Text>
+              <Text style={styles.accordionHeaderTitle}>{t('Ritual Steps & Materials')}</Text>
               <Ionicons
                 name={expandedSection === 'details' ? "chevron-up" : "chevron-down"}
                 size={18}

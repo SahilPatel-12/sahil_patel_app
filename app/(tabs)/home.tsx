@@ -24,6 +24,8 @@ import { useCart } from '../../context/CartContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { supabase } from '../../services/supabase';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { useFocusEffect } from '@react-navigation/native';
+
 
 const { width, height } = Dimensions.get('window');
 
@@ -119,68 +121,7 @@ const DATE_TABS = [
   { id: 'saturday', label: 'Saturday', subLabel: '30 May', icon: 'shield' }
 ];
 
-const BEST_PUJA_COMBOS = [
-  {
-    id: 'c1',
-    dateKey: 'today',
-    title: 'Rudrabhishek + Kashi Vishwanath Prasad',
-    leftImage: require('../../assets/God/Kedarnath.png'),
-    rightImage: require('../../assets/God/Mahakal Ujjain.png'),
-    price: '₹501',
-    originalPrice: '₹1,100',
-    devoteesCount: 'Ordered by 1.2k+ families today',
-  },
-  {
-    id: 'c2',
-    dateKey: 'today',
-    title: 'Maha Laxmi Kuber Homa + Kamal Gatta Mala',
-    leftImage: require('../../assets/God/Jai Mahalakshmi🩷🌷🙏.jpeg'),
-    rightImage: require('../../assets/God/god.png'),
-    price: '₹751',
-    originalPrice: '₹1,500',
-    devoteesCount: 'Ordered by 850+ devotees today',
-  },
-  {
-    id: 'c3',
-    dateKey: 'tomorrow',
-    title: 'Sundarkand Path + Hanuman Ji Bundi Prasad',
-    leftImage: require('../../assets/God/god1.png'),
-    rightImage: require('../../assets/God/_ (5).jpeg'),
-    price: '₹351',
-    originalPrice: '₹701',
-    devoteesCount: '2.1k+ families booked for Tuesday',
-  },
-  {
-    id: 'c4',
-    dateKey: 'tomorrow',
-    title: 'Bajrang Baan Path + Protection Yantra Chadhava',
-    leftImage: require('../../assets/God/god1.png'),
-    rightImage: require('../../assets/God/god.png'),
-    price: '₹251',
-    originalPrice: '₹501',
-    devoteesCount: 'Ordered by 950+ devotees',
-  },
-  {
-    id: 'c5',
-    dateKey: 'ekadashi',
-    title: 'Satyanarayan Vrat Katha + Shaligram Abhishek',
-    leftImage: require('../../assets/God/Lord Venkateswara Images Full Hd Wallpaper 1.png'),
-    rightImage: require('../../assets/God/Omkarashwar.png'),
-    price: '₹501',
-    originalPrice: '₹1,100',
-    devoteesCount: '3.4k+ devotees joined for Ekadashi',
-  },
-  {
-    id: 'c6',
-    dateKey: 'saturday',
-    title: 'Shani Shanti Homa + Black Mustard Oil Chadhava',
-    leftImage: require('../../assets/God/Lord Venkateswara Images Full Hd Wallpaper 1.png'),
-    rightImage: require('../../assets/God/_ (5).jpeg'),
-    price: '₹451',
-    originalPrice: '₹999',
-    devoteesCount: '4.8k+ families blessed on last Saturday',
-  }
-];
+
 
 const SHOP_STORES = [
   {
@@ -274,7 +215,6 @@ export default function HomeScreen() {
   const [oneRupeeItems, setOneRupeeItems] = React.useState<any[]>([]);
   const [isOneRupeeLoading, setIsOneRupeeLoading] = React.useState(true);
   const [problemsList, setProblemsList] = React.useState<any[]>([]);
-  const [comboItems, setComboItems] = React.useState<any[]>([]);
   const [homepageCategories, setHomepageCategories] = React.useState<any[]>([]);
   const [videoReviews, setVideoReviews] = React.useState<any[]>([]);
   const [activeReview, setActiveReview] = React.useState<any>(null);
@@ -294,179 +234,162 @@ export default function HomeScreen() {
         redirect_url: ''
       }));
 
+  const loadActiveHero = React.useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('homepage_hero')
+        .select('*')
+        .eq('is_active', true)
+        .single();
+
+      if (error) {
+        console.log('[Home Hero] Fetch info:', error.message);
+        setHeroData(null);
+      } else {
+        setHeroData(data);
+      }
+    } catch (err) {
+      console.error('[Home Hero] Error fetching dynamic hero:', err);
+    } finally {
+      setIsHeroLoading(false);
+    }
+  }, []);
+
+  const loadOneRupeePoojas = React.useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('one_rupee_poojas')
+        .select('*')
+        .eq('status', 'published')
+        .eq('is_active_on_home', true)
+        .order('sort_order_home', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      console.log('[Home Page] Fetched ₹1 Pujas:', data?.length);
+      if (data) {
+        const formatted = data.map(p => ({
+          id: p.id,
+          title: p.title,
+          originalPrice: p.original_price,
+          offerPrice: p.offer_price,
+          rating: p.rating,
+          reviews: p.reviews,
+          provider: p.provider,
+          image: p.image_url,
+        }));
+        setOneRupeeItems(formatted);
+      }
+    } catch (err) {
+      console.error('[Home One Rupee] Error fetching dynamic data:', err);
+    } finally {
+      setIsOneRupeeLoading(false);
+    }
+  }, []);
+
+  const loadLifeProblems = React.useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('life_problems')
+        .select('*')
+        .order('sort_order', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const formatted = data.map(p => ({
+          id: p.id,
+          title: p.title,
+          color: p.color,
+          gradientColors: [p.gradient_start, p.gradient_end],
+          image: p.image_url ? { uri: p.image_url } : null
+        }));
+        setProblemsList(formatted);
+      }
+    } catch (err) {
+      console.error('[Home Life Problems] Error fetching data:', err);
+    }
+  }, []);
+
+
+
+  const loadHomepageCategories = React.useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('category_by_product')
+        .select('*')
+        .order('category', { ascending: true });
+
+      if (error) throw error;
+      if (data) {
+        const formattedList = data.map((item: any) => ({
+          id: item.id || `db-${item.category}`,
+          name: item.category,
+          image: item.image_url,
+        }));
+        setHomepageCategories(formattedList);
+      }
+    } catch (err) {
+      console.error('[Home Categories] Error loading dynamic categories:', err);
+    }
+  }, []);
+
+  const loadVideoReviews = React.useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('video_reviews')
+        .select('*')
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      if (data) {
+        setVideoReviews(data);
+      }
+    } catch (err) {
+      console.error('[Home Video Reviews] Error fetching:', err);
+    }
+  }, []);
+
+  const loadBanners = React.useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('banners')
+        .select('*')
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      if (data) {
+        setDbBanners(data);
+      }
+    } catch (err) {
+      console.error('[Home Banners] Error fetching:', err);
+    }
+  }, []);
+
+  // Refresh dynamic data every time the screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadActiveHero();
+      loadOneRupeePoojas();
+      loadLifeProblems();
+      loadHomepageCategories();
+      loadVideoReviews();
+      loadBanners();
+    }, [
+      loadActiveHero,
+      loadOneRupeePoojas,
+      loadLifeProblems,
+      loadHomepageCategories,
+      loadVideoReviews,
+      loadBanners
+    ])
+  );
+
   React.useEffect(() => {
-    async function loadActiveHero() {
-      try {
-        const { data, error } = await supabase
-          .from('homepage_hero')
-          .select('*')
-          .eq('is_active', true)
-          .single();
-
-        if (error) {
-          console.log('[Home Hero] Fetch info:', error.message);
-          setHeroData(null);
-        } else {
-          setHeroData(data);
-        }
-      } catch (err) {
-        console.error('[Home Hero] Error fetching dynamic hero:', err);
-      } finally {
-        setIsHeroLoading(false);
-      }
-    }
-
-    async function loadOneRupeePoojas() {
-      try {
-        const { data, error } = await supabase
-          .from('one_rupee_poojas')
-          .select('*')
-          .eq('status', 'published')
-          .eq('is_active_on_home', true)
-          .order('sort_order_home', { ascending: true, nullsFirst: false })
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        
-        if (data) {
-          const formatted = data.map(p => ({
-            id: p.id,
-            title: p.title,
-            originalPrice: p.original_price,
-            offerPrice: p.offer_price,
-            rating: p.rating,
-            reviews: p.reviews,
-            provider: p.provider,
-            image: p.image_url,
-          }));
-          setOneRupeeItems(formatted);
-        }
-      } catch (err) {
-        console.error('[Home One Rupee] Error fetching dynamic data:', err);
-      } finally {
-        setIsOneRupeeLoading(false);
-      }
-    }
-
-    async function loadLifeProblems() {
-      try {
-        const { data, error } = await supabase
-          .from('life_problems')
-          .select('*')
-          .order('sort_order', { ascending: true, nullsFirst: false })
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-
-        if (data && data.length > 0) {
-          const formatted = data.map(p => ({
-            id: p.id,
-            title: p.title,
-            color: p.color,
-            gradientColors: [p.gradient_start, p.gradient_end],
-            image: p.image_url ? { uri: p.image_url } : null
-          }));
-          setProblemsList(formatted);
-        }
-      } catch (err) {
-        console.error('[Home Life Problems] Error fetching data:', err);
-      }
-    }
-
-    async function loadComboPoojas() {
-      try {
-        const { data, error } = await supabase
-          .from('combo_poojas')
-          .select('*')
-          .eq('is_active', true)
-          .order('sort_order', { ascending: true, nullsFirst: false })
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-
-        if (data) {
-          const formatted = data.map(c => ({
-            id: c.id,
-            title: c.title,
-            originalPrice: c.original_price,
-            price: c.price,
-            rating: c.rating,
-            reviews: c.reviews,
-            provider: c.provider,
-            leftImage: c.left_image_url,
-            rightImage: c.right_image_url,
-            devoteesCount: c.devotees_count
-          }));
-          setComboItems(formatted);
-        }
-      } catch (err) {
-        console.error('[Home Combos] Error fetching dynamic combo poojas:', err);
-      }
-    }
-
-    async function loadHomepageCategories() {
-      try {
-        const { data, error } = await supabase
-          .from('category_by_product')
-          .select('*')
-          .order('category', { ascending: true });
-
-        if (error) throw error;
-        if (data) {
-          const formattedList = data.map((item: any) => ({
-            id: item.id || `db-${item.category}`,
-            name: item.category,
-            image: item.image_url,
-          }));
-          setHomepageCategories(formattedList);
-        }
-      } catch (err) {
-        console.error('[Home Categories] Error loading dynamic categories:', err);
-      }
-    }
-
-    async function loadVideoReviews() {
-      try {
-        const { data, error } = await supabase
-          .from('video_reviews')
-          .select('*')
-          .order('sort_order', { ascending: true })
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        if (data) {
-          setVideoReviews(data);
-        }
-      } catch (err) {
-        console.error('[Home Video Reviews] Error fetching:', err);
-      }
-    }
-
-    async function loadBanners() {
-      try {
-        const { data, error } = await supabase
-          .from('banners')
-          .select('*')
-          .order('sort_order', { ascending: true })
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        if (data) {
-          setDbBanners(data);
-        }
-      } catch (err) {
-        console.error('[Home Banners] Error fetching:', err);
-      }
-    }
-
-    loadActiveHero();
-    loadOneRupeePoojas();
-    loadLifeProblems();
-    loadComboPoojas();
-    loadHomepageCategories();
-    loadVideoReviews();
-    loadBanners();
-
     // Subscribe to realtime updates for live sync with isolated dynamic channel names
     const subscription = supabase
       .channel(`home_one_rupee_poojas_${Math.random().toString(36).substring(7)}`)
@@ -481,14 +404,6 @@ export default function HomeScreen() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'life_problems' }, (payload) => {
         console.log('[Home Life Problems] Realtime update received!', payload);
         loadLifeProblems();
-      })
-      .subscribe();
-
-    const subComboPoojas = supabase
-      .channel(`home_combo_poojas_sync_${Math.random().toString(36).substring(7)}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'combo_poojas' }, (payload) => {
-        console.log('[Home Combos] Realtime update received!', payload);
-        loadComboPoojas();
       })
       .subscribe();
 
@@ -527,18 +442,23 @@ export default function HomeScreen() {
     return () => {
       supabase.removeChannel(subscription);
       supabase.removeChannel(subLifeProblems);
-      supabase.removeChannel(subComboPoojas);
       supabase.removeChannel(subCategoryByProduct);
       supabase.removeChannel(subVideoReviews);
       supabase.removeChannel(subBanners);
       supabase.removeChannel(subHomepageHero);
     };
-  }, []);
+  }, [
+    loadActiveHero,
+    loadOneRupeePoojas,
+    loadLifeProblems,
+    loadHomepageCategories,
+    loadVideoReviews,
+    loadBanners
+  ]);
 
   const bannerScrollRef = React.useRef<ScrollView>(null);
   const [activeBannerIndex, setActiveBannerIndex] = React.useState(0);
   const [activeDateTab, setActiveDateTab] = React.useState('today');
-  const [isSectionCollapsed, setIsSectionCollapsed] = React.useState(false);
 
   React.useEffect(() => {
     if (activeBanners.length <= 1) return;
@@ -928,90 +848,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Date-Wise "Most Booked Together" Combo Section */}
-        <View style={styles.comboSection}>
-          <TouchableOpacity
-            style={styles.comboHeaderRow}
-            activeOpacity={0.8}
-            onPress={() => setIsSectionCollapsed(!isSectionCollapsed)}
-          >
-            <View style={styles.comboHeaderLeft}>
-              <Text style={styles.comboHeaderTitle}>{t('mostBooked')}</Text>
-              <Text style={styles.comboHeaderSubtitle}>{t('mostBookedSub')}</Text>
-            </View>
-            <Ionicons
-              name={isSectionCollapsed ? "chevron-down" : "chevron-up"}
-              size={18}
-              color="#334155"
-            />
-          </TouchableOpacity>
 
-          {!isSectionCollapsed && (
-            <>
-              {/* Horizontal Scroll of Combo Cards */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.comboCardsScroll}
-              >
-                {comboItems.map((item) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={styles.comboCard}
-                    activeOpacity={0.95}
-                    onPress={() => router.push({ pathname: '/combo_detail', params: { id: item.id } })}
-                  >
-                    {/* Dual Image Header */}
-                    <View style={styles.comboImageContainer}>
-                      <Image source={typeof item.leftImage === 'number' ? item.leftImage : { uri: item.leftImage }} style={styles.comboHalfImage} contentFit="cover" />
-                      <Image source={typeof item.rightImage === 'number' ? item.rightImage : { uri: item.rightImage }} style={styles.comboHalfImage} contentFit="cover" />
-
-                      {/* Floating Centered Plus Badge */}
-                      <View style={styles.comboPlusBadge}>
-                        <Ionicons name="add" size={14} color="#ea580c" />
-                      </View>
-                    </View>
-
-                    {/* Card Content */}
-                    <View style={styles.comboContent}>
-                      {/* Veg-style tag indicating devotees booking */}
-                      <View style={styles.comboBadgeRow}>
-                        <View style={styles.vegBox}>
-                          <View style={styles.vegDot} />
-                        </View>
-                        <Text style={styles.comboBadgeText}>{t(item.devoteesCount)}</Text>
-                      </View>
-
-                      {/* Title */}
-                      <Text style={styles.comboTitle} numberOfLines={2}>
-                        {t(item.title)}
-                      </Text>
-
-                      {/* Divider */}
-                      <View style={styles.comboDivider} />
-
-                      {/* Price and CTA Footer */}
-                      <View style={styles.comboFooter}>
-                        <View style={styles.comboPriceContainer}>
-                          <Text style={styles.comboOriginalPrice}>{item.originalPrice}</Text>
-                          <Text style={styles.comboPrice}>{item.price}</Text>
-                        </View>
-
-                        <TouchableOpacity
-                          style={styles.comboBookButton}
-                          activeOpacity={0.8}
-                          onPress={() => router.push({ pathname: '/combo_detail', params: { id: item.id } })}
-                        >
-                          <Text style={styles.comboBookButtonText}>{t('Book Combo')}</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </>
-          )}
-        </View>
 
         {/* Shop by Category Section */}
         <View style={styles.shopStoreSection}>
@@ -1705,201 +1542,7 @@ const styles = StyleSheet.create({
     width: 6,
     backgroundColor: '#e2e8f0',
   },
-  comboSection: {
-    backgroundColor: '#ffffff',
-    marginBottom: 24,
-  },
-  comboHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 12,
-  },
-  comboHeaderLeft: {
-    flex: 1,
-    paddingRight: 10,
-  },
-  comboHeaderTitle: {
-    fontSize: 19,
-    fontFamily: 'Outfit-Bold',
-    color: '#000000',
-    letterSpacing: -0.3,
-  },
-  comboHeaderSubtitle: {
-    fontSize: 12.5,
-    fontFamily: 'Outfit-Regular',
-    color: '#64748b',
-    marginTop: 4,
-  },
-  dateTabsContainer: {
-    marginBottom: 14,
-  },
-  dateTabsScroll: {
-    paddingHorizontal: 20,
-    gap: 8,
-  },
-  dateTabPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#fed7aa',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    gap: 6,
-  },
-  dateTabPillActive: {
-    backgroundColor: '#ea580c',
-    borderColor: '#ea580c',
-  },
-  dateTabIcon: {
-    marginRight: 1,
-  },
-  dateTabLabel: {
-    fontSize: 11.5,
-    fontFamily: 'Outfit-Bold',
-    color: '#ea580c',
-    lineHeight: 14,
-  },
-  dateTabLabelActive: {
-    color: '#ffffff',
-  },
-  dateTabSubLabel: {
-    fontSize: 9.5,
-    fontFamily: 'Outfit-Medium',
-    color: '#94a3b8',
-    lineHeight: 12,
-  },
-  dateTabSubLabelActive: {
-    color: 'rgba(255,255,255,0.8)',
-  },
-  comboCardsScroll: {
-    paddingHorizontal: 20,
-    paddingBottom: 10,
-    gap: 14,
-  },
-  comboCard: {
-    width: 250,
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  comboImageContainer: {
-    height: 115,
-    flexDirection: 'row',
-    position: 'relative',
-    backgroundColor: '#f8fafc',
-  },
-  comboHalfImage: {
-    width: '50%',
-    height: '100%',
-  },
-  comboPlusBadge: {
-    position: 'absolute',
-    alignSelf: 'center',
-    top: '50%',
-    left: '50%',
-    marginTop: -14,
-    marginLeft: -14,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#ffffff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-    zIndex: 10,
-  },
-  comboContent: {
-    padding: 14,
-  },
-  comboBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-  },
-  vegBox: {
-    width: 13,
-    height: 13,
-    borderWidth: 1,
-    borderColor: '#ea580c',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 3,
-    padding: 1,
-  },
-  vegDot: {
-    width: 6,
-    height: 6,
-    backgroundColor: '#ea580c',
-    borderRadius: 3,
-  },
-  comboBadgeText: {
-    fontSize: 10,
-    fontFamily: 'Outfit-Bold',
-    color: '#ea580c',
-  },
-  comboTitle: {
-    fontSize: 13.5,
-    fontFamily: 'Outfit-Bold',
-    color: '#1e293b',
-    lineHeight: 18,
-    minHeight: 36,
-  },
-  comboDivider: {
-    height: 1,
-    backgroundColor: '#f1f5f9',
-    marginVertical: 12,
-  },
-  comboFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  comboPriceContainer: {
-    flexDirection: 'column',
-  },
-  comboOriginalPrice: {
-    fontSize: 10.5,
-    fontFamily: 'Outfit-Medium',
-    color: '#94a3b8',
-    textDecorationLine: 'line-through',
-    lineHeight: 13,
-  },
-  comboPrice: {
-    fontSize: 15.5,
-    fontFamily: 'Outfit-ExtraBold',
-    color: '#000000',
-    lineHeight: 18,
-  },
-  comboBookButton: {
-    borderWidth: 1.5,
-    borderColor: '#388e3c',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    backgroundColor: '#ffffff',
-  },
-  comboBookButtonText: {
-    fontSize: 11,
-    fontFamily: 'Outfit-Bold',
-    color: '#388e3c',
-    textAlign: 'center',
-  },
+
   shopStoreSection: {
     backgroundColor: '#ffffff',
     marginBottom: 24,

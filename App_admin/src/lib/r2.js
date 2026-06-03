@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 
 const endpoint = import.meta.env.VITE_CLOUDFLARE_ENDPOINT;
@@ -73,3 +73,37 @@ export async function uploadToR2(file, folder = 'hero', onProgress = null) {
     throw new Error(err.message || 'Cloudflare R2 upload failed.');
   }
 }
+
+/**
+ * Deletes a file from Cloudflare R2 storage bucket given its public URL
+ * @param {string} fileUrl The public CDN URL of the file
+ */
+export async function deleteFromR2(fileUrl) {
+  if (!fileUrl) return;
+  if (!endpoint || !accessKeyId || !secretAccessKey || !bucketName || !publicBaseUrl) {
+    console.warn('[Cloudflare R2] Environment configurations are missing. Cannot delete from R2.');
+    return;
+  }
+
+  try {
+    const cleanBaseUrl = publicBaseUrl.endsWith('/') ? publicBaseUrl.slice(0, -1) : publicBaseUrl;
+    if (!fileUrl.startsWith(cleanBaseUrl)) {
+      console.log(`[Cloudflare R2] URL ${fileUrl} is not an R2 custom domain URL. Skipping deletion.`);
+      return;
+    }
+
+    const key = fileUrl.replace(`${cleanBaseUrl}/`, '');
+    console.log(`[Cloudflare R2] Attempting to delete object key: ${key} from bucket ${bucketName}...`);
+
+    const command = new DeleteObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    });
+
+    await r2Client.send(command);
+    console.log(`[Cloudflare R2] Successfully deleted key: ${key} from R2 bucket.`);
+  } catch (err) {
+    console.error('[Cloudflare R2] S3 delete command failed:', err);
+  }
+}
+

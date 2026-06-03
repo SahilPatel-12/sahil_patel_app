@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Text, View, StyleSheet, ScrollView, Image, TouchableOpacity, Dimensions, FlatList, Modal, Share, Alert } from "react-native";
+import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, FlatList, Modal, Share, Alert } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -9,7 +9,10 @@ import { router } from 'expo-router';
 import { useCart } from '../../context/CartContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { supabase } from '../../services/supabase';
+import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { useFocusEffect } from '@react-navigation/native';
+
 
 const { width } = Dimensions.get('window');
 
@@ -423,252 +426,269 @@ export default function PujaScreen() {
   const [activePanditVideo, setActivePanditVideo] = useState<any>(null);
   const [pujaBanner, setPujaBanner] = useState<any>(null);
 
-  React.useEffect(() => {
-    async function loadOneRupeePoojas() {
-      try {
-        const { data, error } = await supabase
-          .from('one_rupee_poojas')
+  const loadOneRupeePoojas = React.useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('one_rupee_poojas')
+        .select('*')
+        .eq('status', 'published')
+        .eq('is_active', true)
+        .order('sort_order_puja', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      
+      console.log('[Puja Page] Fetched ₹1 Pujas:', data?.length);
+      if (data) {
+        const formatted = data.map(p => ({
+          id: p.id,
+          title: p.title,
+          originalPrice: p.original_price,
+          offerPrice: p.offer_price,
+          rating: p.rating,
+          reviews: p.reviews,
+          provider: p.provider,
+          image: p.image_url,
+        }));
+        setOneRupeeItems(formatted);
+      }
+    } catch (err) {
+      console.error('[Puja Screen] Error loading dynamic ₹1 poojas:', err);
+    }
+  }, []);
+
+  const loadGeneralPoojas = React.useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('general_poojas')
+        .select('*')
+        .eq('status', 'published')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      if (data) {
+        const formatted = data.map(p => ({
+          id: p.id,
+          title: p.title,
+          originalPrice: p.original_price || '',
+          offerPrice: p.offer_price || '',
+          price: p.offer_price || '',
+          rating: p.rating || '5.0',
+          reviews: p.reviews || '0',
+          provider: p.provider || 'Vedic Pandits',
+          description: p.tagline || '',
+          time: '2 Hours',
+          image: p.image_url || 'https://pub-3027d8d3defe4496978413d3c630aa44.r2.dev/god.png',
+        }));
+        setGeneralPujas(formatted);
+      }
+    } catch (err) {
+      console.error('[Puja Screen] Error loading dynamic general poojas:', err);
+    }
+  }, []);
+
+  const loadProblemPoojas = React.useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('problem_poojas')
+        .select('*')
+        .eq('status', 'published')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      if (data) {
+        const formatted = data.map(p => ({
+          id: p.id,
+          title: p.title,
+          originalPrice: p.original_price,
+          offerPrice: p.offer_price,
+          price: p.offer_price,
+          rating: p.rating,
+          reviews: p.reviews,
+          provider: p.provider,
+          description: 'by ' + p.provider,
+          time: p.requirement || '45-60 mins',
+          image: p.image_url,
+          problem_category: p.problem_category
+        }));
+        setProblemPoojas(formatted);
+      }
+    } catch (err) {
+      console.error('[Puja Screen] Error loading dynamic problem poojas:', err);
+    }
+  }, []);
+
+  const loadLifeProblems = React.useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('life_problems')
+        .select('*')
+        .order('sort_order', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      if (data && data.length > 0) {
+        const formatted = data.map(p => ({
+          id: p.id,
+          title: p.title,
+          image: p.image_url,
+        }));
+        setLifeProblems(formatted);
+      }
+    } catch (err) {
+      console.error('[Puja Screen] Error loading dynamic life problems:', err);
+    }
+  }, []);
+
+  const loadOfferSections = React.useCallback(async () => {
+    try {
+      const { data: sectionsData, error: secErr } = await supabase
+        .from('offer_sections')
+        .select('*')
+        .eq('status', 'published')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+
+      if (secErr) throw secErr;
+
+      if (sectionsData && sectionsData.length > 0) {
+        const sectionIds = sectionsData.map(s => s.id);
+        const { data: pujasData, error: pujasErr } = await supabase
+          .from('offer_pujas')
           .select('*')
           .eq('status', 'published')
           .eq('is_active', true)
-          .order('sort_order_puja', { ascending: true, nullsFirst: false })
-          .order('created_at', { ascending: false });
-        if (error) throw error;
-        if (data) {
-          const formatted = data.map(p => ({
-            id: p.id,
-            title: p.title,
-            originalPrice: p.original_price,
-            offerPrice: p.offer_price,
-            rating: p.rating,
-            reviews: p.reviews,
-            provider: p.provider,
-            image: p.image_url,
-          }));
-          setOneRupeeItems(formatted);
-        }
-      } catch (err) {
-        console.error('[Puja Screen] Error loading dynamic ₹1 poojas:', err);
-      }
-    }
+          .in('section_id', sectionIds)
+          .order('sort_order', { ascending: true });
 
-    async function loadGeneralPoojas() {
-      try {
-        const { data, error } = await supabase
-          .from('website_pooja_products')
-          .select('*')
-          .eq('is_published', true)
-          .order('created_at', { ascending: false });
-        if (error) throw error;
-        if (data) {
-          const formatted = data.map(p => ({
-            id: p.id,
-            title: p.name,
-            originalPrice: p.original_price ? '₹' + p.original_price : '',
-            offerPrice: p.price ? '₹' + p.price : '',
-            price: p.price ? '₹' + p.price : '',
-            rating: p.rating ? String(p.rating) : '5.0',
-            reviews: p.reviews_count ? String(p.reviews_count) : '0',
-            provider: p.temple_association || 'Vedic Pandits',
-            description: p.short_description || p.subtitle || '',
-            time: p.duration || '45-60 mins',
-            image: p.image || 'https://pub-3027d8d3defe4496978413d3c630aa44.r2.dev/god.png',
-          }));
-          setGeneralPujas(formatted);
-        }
-      } catch (err) {
-        console.error('[Puja Screen] Error loading dynamic general poojas:', err);
-      }
-    }
+        if (pujasErr) throw pujasErr;
 
-    async function loadProblemPoojas() {
-      try {
-        const { data, error } = await supabase
-          .from('problem_poojas')
-          .select('*')
-          .eq('status', 'published')
-          .eq('is_active', true)
-          .order('sort_order', { ascending: true, nullsFirst: false })
-          .order('created_at', { ascending: false });
-        if (error) throw error;
-        if (data) {
-          const formatted = data.map(p => ({
-            id: p.id,
-            title: p.title,
-            originalPrice: p.original_price,
-            offerPrice: p.offer_price,
-            price: p.offer_price,
-            rating: p.rating,
-            reviews: p.reviews,
-            provider: p.provider,
-            description: 'by ' + p.provider,
-            time: p.requirement || '45-60 mins',
-            image: p.image_url,
-            problem_category: p.problem_category
-          }));
-          setProblemPoojas(formatted);
-        }
-      } catch (err) {
-        console.error('[Puja Screen] Error loading dynamic problem poojas:', err);
+        const mapped = sectionsData.map(sec => {
+          const items = (pujasData || [])
+            .filter(p => p.section_id === sec.id)
+            .map(p => ({
+              id: p.id,
+              slug: p.slug,
+              name: p.title,
+              image: p.thumbnail_url || 'https://pub-3027d8d3defe4496978413d3c630aa44.r2.dev/god.png'
+            }));
+          return {
+            id: sec.id,
+            title: sec.title,
+            subtitle: sec.subtitle,
+            bgImage: sec.background_image_url || 'https://pub-3027d8d3defe4496978413d3c630aa44.r2.dev/god.png',
+            items
+          };
+        });
+        setOfferSections(mapped);
+      } else {
+        setOfferSections([]);
       }
+    } catch (err) {
+      console.error('[Puja Screen] Error loading dynamic offer sections:', err);
     }
+  }, []);
 
-    async function loadLifeProblems() {
-      try {
-        const { data, error } = await supabase
-          .from('life_problems')
-          .select('*')
-          .order('sort_order', { ascending: true, nullsFirst: false })
-          .order('created_at', { ascending: false });
-        if (error) throw error;
-        if (data && data.length > 0) {
-          const formatted = data.map(p => ({
-            id: p.id,
-            title: p.title,
-            image: p.image_url,
-          }));
-          setLifeProblems(formatted);
-        }
-      } catch (err) {
-        console.error('[Puja Screen] Error loading dynamic life problems:', err);
-      }
-    }
+  const loadDailySections = React.useCallback(async () => {
+    try {
+      const { data: sectionsData, error: secErr } = await supabase
+        .from('daily_sections')
+        .select('*');
 
-    async function loadOfferSections() {
-      try {
-        const { data: sectionsData, error: secErr } = await supabase
-          .from('offer_sections')
+      if (secErr) throw secErr;
+
+      if (sectionsData && sectionsData.length > 0) {
+        const { data: pujasData, error: pujasErr } = await supabase
+          .from('daily_pujas')
           .select('*')
-          .eq('status', 'published')
           .eq('is_active', true)
           .order('sort_order', { ascending: true });
 
-        if (secErr) throw secErr;
+        if (pujasErr) throw pujasErr;
 
-        if (sectionsData && sectionsData.length > 0) {
-          const sectionIds = sectionsData.map(s => s.id);
-          const { data: pujasData, error: pujasErr } = await supabase
-            .from('offer_pujas')
-            .select('*')
-            .eq('status', 'published')
-            .eq('is_active', true)
-            .in('section_id', sectionIds)
-            .order('sort_order', { ascending: true });
-
-          if (pujasErr) throw pujasErr;
-
-          const mapped = sectionsData.map(sec => {
-            const items = (pujasData || [])
-              .filter(p => p.section_id === sec.id)
-              .map(p => ({
-                id: p.id,
-                slug: p.slug,
-                name: p.title,
-                image: p.thumbnail_url || 'https://pub-3027d8d3defe4496978413d3c630aa44.r2.dev/god.png'
-              }));
-            return {
-              id: sec.id,
-              title: sec.title,
-              subtitle: sec.subtitle,
-              bgImage: sec.background_image_url || 'https://pub-3027d8d3defe4496978413d3c630aa44.r2.dev/god.png',
-              items
-            };
-          });
-          setOfferSections(mapped);
-        } else {
-          setOfferSections([]);
-        }
-      } catch (err) {
-        console.error('[Puja Screen] Error loading dynamic offer sections:', err);
+        const mapped: { [key: number]: any } = {};
+        sectionsData.forEach(sec => {
+          const items = (pujasData || [])
+            .filter(p => p.day_of_week === sec.day_of_week)
+            .map(p => ({
+              id: p.id,
+              slug: p.slug,
+              name: p.title,
+              image: p.thumbnail_url || 'https://pub-3027d8d3defe4496978413d3c630aa44.r2.dev/god.png'
+            }));
+          mapped[sec.day_of_week] = {
+            title: sec.title,
+            subtitle: sec.subtitle,
+            bgImage: sec.background_image_url || 'https://images.unsplash.com/photo-1608976328321-2f9b229f3e08?auto=format&fit=crop&w=800&q=80',
+            items
+          };
+        });
+        setDailySections(mapped);
+      } else {
+        setDailySections({});
       }
+    } catch (err) {
+      console.error('[Puja Screen] Error loading dynamic daily sections:', err);
     }
+  }, []);
 
-    async function loadDailySections() {
-      try {
-        const { data: sectionsData, error: secErr } = await supabase
-          .from('daily_sections')
-          .select('*');
+  const loadPanditVideos = React.useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('pandit_videos')
+        .select('*')
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: false });
 
-        if (secErr) throw secErr;
-
-        if (sectionsData && sectionsData.length > 0) {
-          const { data: pujasData, error: pujasErr } = await supabase
-            .from('daily_pujas')
-            .select('*')
-            .eq('is_active', true)
-            .order('sort_order', { ascending: true });
-
-          if (pujasErr) throw pujasErr;
-
-          const mapped: { [key: number]: any } = {};
-          sectionsData.forEach(sec => {
-            const items = (pujasData || [])
-              .filter(p => p.day_of_week === sec.day_of_week)
-              .map(p => ({
-                id: p.id,
-                slug: p.slug,
-                name: p.title,
-                image: p.thumbnail_url || 'https://pub-3027d8d3defe4496978413d3c630aa44.r2.dev/god.png'
-              }));
-            mapped[sec.day_of_week] = {
-              title: sec.title,
-              subtitle: sec.subtitle,
-              bgImage: sec.background_image_url || 'https://images.unsplash.com/photo-1608976328321-2f9b229f3e08?auto=format&fit=crop&w=800&q=80',
-              items
-            };
-          });
-          setDailySections(mapped);
-        } else {
-          setDailySections({});
-        }
-      } catch (err) {
-        console.error('[Puja Screen] Error loading dynamic daily sections:', err);
+      if (error) throw error;
+      if (data) {
+        setPanditVideos(data);
       }
+    } catch (err) {
+      console.error('[Puja Screen] Error loading dynamic pandit videos:', err);
     }
+  }, []);
 
-    async function loadPanditVideos() {
-      try {
-        const { data, error } = await supabase
-          .from('pandit_videos')
-          .select('*')
-          .order('sort_order', { ascending: true })
-          .order('created_at', { ascending: false });
+  const loadPujaBanner = React.useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('puja_banners')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-        if (error) throw error;
-        if (data) {
-          setPanditVideos(data);
-        }
-      } catch (err) {
-        console.error('[Puja Screen] Error loading dynamic pandit videos:', err);
-      }
+      if (error) throw error;
+      setPujaBanner(data || null);
+    } catch (err) {
+      console.error('[Puja Screen] Error loading dynamic puja banner:', err);
     }
+  }, []);
 
-    async function loadPujaBanner() {
-      try {
-        const { data, error } = await supabase
-          .from('puja_banners')
-          .select('*')
-          .eq('is_active', true)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+  // Reload everything on focus to guarantee fresh sync
+  useFocusEffect(
+    React.useCallback(() => {
+      loadOneRupeePoojas();
+      loadGeneralPoojas();
+      loadProblemPoojas();
+      loadLifeProblems();
+      loadOfferSections();
+      loadDailySections();
+      loadPanditVideos();
+      loadPujaBanner();
+    }, [
+      loadOneRupeePoojas,
+      loadGeneralPoojas,
+      loadProblemPoojas,
+      loadLifeProblems,
+      loadOfferSections,
+      loadDailySections,
+      loadPanditVideos,
+      loadPujaBanner
+    ])
+  );
 
-        if (error) throw error;
-        setPujaBanner(data || null);
-      } catch (err) {
-        console.error('[Puja Screen] Error loading dynamic puja banner:', err);
-      }
-    }
-
-    loadOneRupeePoojas();
-    loadGeneralPoojas();
-    loadProblemPoojas();
-    loadLifeProblems();
-    loadOfferSections();
-    loadDailySections();
-    loadPanditVideos();
-    loadPujaBanner();
-
+  React.useEffect(() => {
     // Live sync automatic reloading via Supabase Realtime channel
     const subscription = supabase
       .channel('puja_one_rupee_poojas_sync')
@@ -680,7 +700,7 @@ export default function PujaScreen() {
 
     const generalSubscription = supabase
       .channel('puja_general_poojas_sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'website_pooja_products' }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'general_poojas' }, (payload) => {
         console.log('[Puja Screen] Realtime event caught, auto-reloading general feed...', payload);
         loadGeneralPoojas();
       })
@@ -762,7 +782,16 @@ export default function PujaScreen() {
       supabase.removeChannel(panditVideosSubscription);
       supabase.removeChannel(pujaBannerSubscription);
     };
-  }, []);
+  }, [
+    loadOneRupeePoojas,
+    loadGeneralPoojas,
+    loadProblemPoojas,
+    loadLifeProblems,
+    loadOfferSections,
+    loadDailySections,
+    loadPanditVideos,
+    loadPujaBanner
+  ]);
 
   const displayedGeneralPujas = generalPujas.length > 0 ? generalPujas : PUJAS_DATA.map(p => ({
     id: p.id,
@@ -783,7 +812,7 @@ export default function PujaScreen() {
   const row1Items = oneRupeeItems.filter((_, index) => index % 2 === 0);
   const row2Items = oneRupeeItems.filter((_, index) => index % 2 !== 0);
 
-  const PROBLEM_CATEGORIES = ['Health', 'Wealth', 'Job & Career', 'Marriage & Love', 'Grah Dosh'];
+  const PROBLEM_CATEGORIES = ['Health', 'Wealth', 'Job & Career', 'Marriage & Love', 'Grah Dosh', 'Education'];
 
   const filteredProblemPujas = React.useMemo(() => {
     if (problemPoojas.length > 0) {
@@ -860,6 +889,7 @@ export default function PujaScreen() {
           <Image
             source={typeof item.image === 'number' ? item.image : { uri: item.image }}
             style={styles.productImage}
+            contentFit="cover"
           />
           {quantityInCart === 0 ? (
             <TouchableOpacity 
@@ -971,7 +1001,7 @@ export default function PujaScreen() {
               styles.categoryImage,
               { width: '100%', height: '100%' }
             ]} 
-            resizeMode="cover"
+            contentFit="cover"
           />
         </View>
         <Text 
@@ -1057,7 +1087,7 @@ export default function PujaScreen() {
                   <Image
                     source={pujaBanner?.image_url ? { uri: pujaBanner.image_url } : require('../../assets/God/puja_banner_illustration.png')}
                     style={styles.bannerImage}
-                    resizeMode="cover"
+                    contentFit="cover"
                   />
                 </View>
 
@@ -1232,7 +1262,7 @@ export default function PujaScreen() {
                       params: { id: subItem.id, slug: subItem.slug }
                     })}
                   >
-                    <Image source={typeof subItem.image === 'number' ? subItem.image : { uri: subItem.image }} style={styles.curatedItemImage} />
+                    <Image source={typeof subItem.image === 'number' ? subItem.image : { uri: subItem.image }} style={styles.curatedItemImage} contentFit="cover" />
                     <View style={styles.curatedItemLabel}>
                       <Text style={styles.curatedItemText} numberOfLines={2}>{t(subItem.name)}</Text>
                     </View>
@@ -1296,7 +1326,7 @@ export default function PujaScreen() {
                         <Image
                           source={item.image}
                           style={styles.dayCircleImage}
-                          resizeMode="contain"
+                          contentFit="contain"
                         />
                       </View>
                     </View>
@@ -1368,6 +1398,7 @@ export default function PujaScreen() {
                     <Image 
                       source={typeof subItem.image === 'number' ? subItem.image : { uri: subItem.image }} 
                       style={styles.curatedItemImage} 
+                      contentFit="cover"
                     />
                     <View style={styles.curatedItemLabel}>
                       <Text style={styles.curatedItemText} numberOfLines={2}>{t(subItem.name)}</Text>
@@ -1405,7 +1436,7 @@ export default function PujaScreen() {
                       params: { id: subItem.id, slug: subItem.slug }
                     })}
                   >
-                    <Image source={typeof subItem.image === 'number' ? subItem.image : { uri: subItem.image }} style={styles.curatedItemImage} />
+                    <Image source={typeof subItem.image === 'number' ? subItem.image : { uri: subItem.image }} style={styles.curatedItemImage} contentFit="cover" />
                     <View style={styles.curatedItemLabel}>
                       <Text style={styles.curatedItemText} numberOfLines={2}>{t(subItem.name)}</Text>
                     </View>
@@ -1426,7 +1457,7 @@ export default function PujaScreen() {
               <View key={item.id} style={styles.pujaListItem}>
                 {/* Left Side: Deity Thumbnail Container with Floating Rating */}
                 <View style={styles.pujaListLeftColumn}>
-                  <Image source={typeof item.image === 'number' ? item.image : { uri: item.image }} style={styles.pujaListImage} />
+                  <Image source={typeof item.image === 'number' ? item.image : { uri: item.image }} style={styles.pujaListImage} contentFit="cover" />
                   <View style={styles.pujaListRatingBadge}>
                     <Ionicons name="star" size={10} color="#ffffff" style={{ marginRight: 2 }} />
                     <Text style={styles.pujaListRatingText}>{item.rating}</Text>
@@ -1479,7 +1510,7 @@ export default function PujaScreen() {
           <TouchableOpacity
             style={styles.viewMoreButton}
             activeOpacity={0.8}
-            onPress={() => router.push('/all_pujas')}
+            onPress={() => router.push('/all_general_pujas')}
           >
             <Text style={styles.viewMoreText}>{t('View All Pujas')}</Text>
             <Ionicons name="arrow-forward" size={14} color="#f57c00" style={{ marginLeft: 6 }} />
@@ -1545,7 +1576,7 @@ export default function PujaScreen() {
                 <Image
                   source={item.thumbnail_url ? { uri: item.thumbnail_url } : (idx === 0 || idx === 3 ? require('../../assets/review/celebration-navratri-deity_23-2151220009.avif') : idx === 1 ? require('../../assets/review/istockphoto-944138400-612x612.jpg') : require('../../assets/review/pngtree-indian-handsome-man-thinking-happy-young-dress-photo-image_15140676.jpg'))}
                   style={styles.panditVideoThumbnail}
-                  resizeMode="cover"
+                  contentFit="cover"
                 />
 
                 {/* Black Overlay for readability */}
@@ -1900,7 +1931,6 @@ const styles = StyleSheet.create({
   categoryImage: {
     width: '90%',
     height: '90%',
-    resizeMode: 'contain',
   },
   categoryTitle: {
     fontSize: 11,
@@ -1936,7 +1966,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 15,
-    resizeMode: 'cover',
   },
   priceBurst: {
     position: 'absolute',
@@ -2099,7 +2128,6 @@ const styles = StyleSheet.create({
   curatedItemImage: {
     width: '100%',
     height: 85, // Increased size
-    resizeMode: 'cover',
   },
   curatedItemLabel: {
     padding: 4,
@@ -2318,7 +2346,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 16,
-    resizeMode: 'cover',
     backgroundColor: '#f8fafc',
   },
   pujaListRatingBadge: {

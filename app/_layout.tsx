@@ -35,7 +35,6 @@ export default function RootLayout() {
               <Stack.Screen name="login" />
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="puja_detail" />
-              <Stack.Screen name="combo_detail" />
               <Stack.Screen name="settings_detail" />
               <Stack.Screen name="notifications" />
               <Stack.Screen name="share" />
