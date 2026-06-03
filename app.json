@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "mantrapuja",
+    "slug": "mantrapuja",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/app_logos/icon.png",
+    "scheme": "mantrapuja",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mantrapuja.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/app_logos/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "backgroundColor": "#E6F4FE",
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.mantrapuja.app"
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/app_logos/favicon.png"
+    },
+    "splash": {
+      "image": "./assets/app_logos/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-video",
+      "expo-font",
+      "expo-audio",
+      "expo-asset",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you set a profile picture."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": false
+    }
+  }
+}

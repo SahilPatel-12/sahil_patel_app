@@ -1,0 +1,225 @@
+-- Migration: Create combo_poojas table & seed initial entries
+-- Date: 2026-05-31
+
+CREATE TABLE IF NOT EXISTS public.combo_poojas (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  title TEXT NOT NULL,
+  tagline TEXT,
+  left_image_url TEXT,
+  right_image_url TEXT,
+  price TEXT DEFAULT '₹501',
+  original_price TEXT DEFAULT '₹1,100',
+  rating TEXT DEFAULT '4.9',
+  reviews TEXT DEFAULT '1,200',
+  provider TEXT NOT NULL,
+  tag TEXT DEFAULT 'Maha Combo',
+  devotees_count TEXT DEFAULT 'Ordered by 1.2k+ families today',
+  benefits TEXT,
+  steps TEXT,
+  samagri TEXT,
+  pandit TEXT,
+  temple TEXT,
+  prasad TEXT,
+  other_info TEXT,
+  single_title TEXT DEFAULT 'Single Sankalp',
+  single_description TEXT DEFAULT 'Individual name & gotra Sankalp + Holy Prasad transit box.',
+  family_title TEXT DEFAULT 'Family Pariwar',
+  family_description TEXT DEFAULT 'Full household (4 names) Sankalps + Consecrated copper yantra shield.',
+  is_active BOOLEAN DEFAULT true,
+  sort_order INTEGER DEFAULT 1,
+  translations JSONB DEFAULT '{}'::jsonb
+);
+
+-- Enable RLS (Row Level Security)
+ALTER TABLE public.combo_poojas ENABLE ROW LEVEL SECURITY;
+
+-- Create public read policy
+CREATE POLICY "Allow public read access" ON public.combo_poojas
+  FOR SELECT USING (true);
+
+-- Create authenticated write policy
+CREATE POLICY "Allow auth all access" ON public.combo_poojas
+  FOR ALL USING (true) WITH CHECK (true);
+
+-- Enable Supabase Realtime for combo_poojas table
+ALTER PUBLICATION supabase_realtime ADD TABLE public.combo_poojas;
+
+-- Seed the initial 2 high-fidelity Combo Pujas matching App defaults
+INSERT INTO public.combo_poojas (
+  title, tagline, left_image_url, right_image_url, price, original_price, rating, reviews, provider, tag, devotees_count, benefits, steps, samagri, pandit, temple, prasad, other_info, single_title, single_description, family_title, family_description, is_active, sort_order, translations
+) VALUES 
+(
+  'Rudrabhishek + Kashi Vishwanath Prasad', 
+  'Achieve supreme cosmic protection & Kashi blessings in a single combined ritual.', 
+  'https://pub-3027d8d3defe4496978413d3c630aa44.r2.dev/Kedarnath.png', 
+  'https://pub-3027d8d3defe4496978413d3c630aa44.r2.dev/Mahakal_Ujjain.png', 
+  '₹501', 
+  '₹1,100', 
+  '4.9', 
+  '1,200', 
+  'Kashi Vishwanath Trust & Priests', 
+  'Maha Combo', 
+  'Ordered by 1.2k+ families today',
+  '• Protects your household from negative influences, legal disputes & sudden losses
+• Chanting of Shiva Stotrams purifies domestic environment and blocks negative planetary forces
+• Directly brings Kashi Swayambhu shrine blessings into your living room',
+  '• Sankalp with client Name, Gotra & family details chanted in Kashi
+• Maha Rudrabhishek Abhishek done on holy lingam with milk & honey
+• Flower shringar tribute & standard evening Ganga Aarti dedication
+• High-energy chanting of 1,008 Shiv Shasranama verses',
+  'Holy Gangajal water, pure honey, raw milk, bilvapatra leaves, white chandan, and fresh marigold garlands.',
+  'Acharya Raman Shastri (Varanasi Gurukul, 15+ years experience)',
+  'Holy Ganges bank & Kashi Vishwanath, Uttar Pradesh',
+  'Pure Kashi Vishwanath Lal Peda prasad box, energized iron Shiva pocket card, and raw sacred Gangajal bottle.',
+  'Your customized double Sankalp represents spiritual shielding. A short clip of your specific puja and name chant at Varanasi will be messaged to your phone.',
+  'Single Sankalp', 
+  'Individual name & gotra Sankalp + Holy Prasad transit box.', 
+  'Family Pariwar', 
+  'Full household (4 names) Sankalps + Consecrated copper yantra shield.', 
+  true, 
+  1,
+  '{
+    "title_Hindi": "रुद्राभिषेक + काशी विश्वनाथ प्रसाद",
+    "tagline_Hindi": "एक ही संयुक्त अनुष्ठान में सर्वोच्च ब्रह्मांडीय सुरक्षा और दिव्य काशी मंदिर का आशीर्वाद प्राप्त करें।",
+    "benefits_Hindi": "• आपके परिवार को नकारात्मक प्रभावों, कानूनी विवादों और अचानक होने वाले नुकसान से बचाता है\n• शिव स्तोत्र का जाप घरेलू वातावरण को शुद्ध करता है और प्रतिकूल ग्रहीय प्रभावों को रोकता है\n• काशी स्वयंभू मंदिर के आशीर्वाद को सीधे आपके घर लाता है",
+    "steps_Hindi": "• काशी में आपके नाम, गोत्र और पारिवारिक विवरण के साथ संकल्प पाठ\n• दूध और शहद से पवित्र शिवलिंग पर महा रुद्राभिषेक\n• फूलों से श्रृंगार और शाम की गंगा आरती का समर्पण\n• 1,008 शिव सहस्रनाम मंत्रों का उच्च-ऊर्जा जाप",
+    "samagri_Hindi": "पवित्र गंगाजल, शुद्ध शहद, कच्चा दूध, बिल्वपत्र, सफेद चंदन और ताजे गेंदे की माला।",
+    "pandit_Hindi": "आचार्य रमन शास्त्री (वाराणसी गुरुकुल, 15+ वर्ष का अनुभव)",
+    "temple_Hindi": "पवित्र गंगा तट और काशी विश्वनाथ, उत्तर प्रदेश",
+    "prasad_Hindi": "शुद्ध काशी विश्वनाथ लाल पेड़ा प्रसाद बॉक्स, अभिमंत्रित शिव लोहे का पॉकेट कार्ड और पवित्र गंगाजल की बोतल।",
+    "otherInfo_Hindi": "आपका कस्टमाइज्ड दोहरा संकल्प आध्यात्मिक सुरक्षा का प्रतिनिधित्व करता है। वाराणसी में आपकी विशिष्ट पूजा और नाम जाप का एक छोटा वीडियो क्लिप आपके फोन पर भेजा जाएगा।",
+    "title_Sanskrit": "रुद्राभिषेकः + काशी विश्वनाथ प्रसादः",
+    "tagline_Sanskrit": "एकस्मिन् एव अनुष्ठाने परमां ब्रह्माण्डीयरक्षां काशीविश्वनाथकृपां च प्राप्नोति।",
+    "benefits_Sanskrit": "• भवतः कुटुम्बं क्रूरदृष्टिभ्यः, न्यायालयरोगविवादेभ्यः, महद्धनहानिभ्यः च रक्षति\n• शिवस्तोत्रपाठनं गृहवातावरणं पावयति क्रूरग्रहप्रभावांश्च निवारयति\n• साक्षात् काशीस्वयम्भूलिङ्गकृपां भवतः गृहं प्रति आनयति",
+    "steps_Sanskrit": "• काशीक्षेत्रे भवतः नाम-गोत्र-कुटुम्बविवरणैः सह सङ्कल्पोच्चारणम्\n• गोदुग्धेन मधुना च पवित्रलिङ्गोपरि महारुद्राभिषेकः\n• पुष्पशृङ्गारविधिः सायङ्काल गङ्गा आरती समर्पणं च\n• १०८ शिवसहस्रनामस्तोत्रमन्त्राणां परमपावनजपः",
+    "samagri_Sanskrit": "पवित्रं गङ्गाजलं, पवित्रं मधु, गोदुग्धं, बिल्वपत्राणि, श्वेतचन्दनं, ताजा गन्धपुष्पमाला च।",
+    "pandit_Sanskrit": "आचार्यः रमण शास्त्री (वाराणसी गुरुकुलम्, १५+ वर्षाणाम् अनुभवः)",
+    "temple_Sanskrit": "पवित्र गङ्गातटः काशी विश्वनाथमन्दिरं च, उत्तरप्रदेशः",
+    "prasad_Sanskrit": "शुद्धा काशी विश्वनाथ लालपेडा प्रसादमञ्जूषा, ऊर्जामयी लोहशिवपत्रिका, पाวน गङ्गाजलकूपिका च।",
+    "otherInfo_Sanskrit": "भवतः संकनल्पः कवचमिव कार्यं करिष्यति। वाराणसीक्षेत्रे भवतः पूजायाः नामसङ्कीर्तनस्य च लघुदृश्यं व्हाट्सएप-द्वारा प्रेषयिष्यते।",
+    "title_Gujarati": "રુદ્રાભિષેક + કાશી વિશ્વનાથ પ્રસાદ",
+    "tagline_Gujarati": "એક જ પૂજા વિધિમાં બ્રહ્માંડીય રક્ષણ અને કાશી વિશ્વનાથના આશીર્વાદ મેળવો.",
+    "benefits_Gujarati": "• તમારા ઘરને નકારાત્મક અસરો, કાનૂની વિવાદો અને નુકસานથી બચાવે છે\n• શિવ સ્તોત્રના પાઠથી ઘરનું વાતાવરણ પવિત્ર થાય છે\n• કાશી સ્વયંભૂ મંદિરના આશીર્વાદ સીધા તમારા ઘરમાં લાવે છે",
+    "steps_Gujarati": "• કાશીમાં તમારા નામ, ગોત્ર અને પરિવારની વિગતો સાથે સંકલ્પ\n• દૂધ અને મધ સાથે પવિત્ર શિવલિંગ પર મહા રુદ્રાભિષેક\n• ફૂલ શ્રૃંગાર અને સાંજે ગંગા આરતી અર્પણ\n• 1,008 શિવ સહસ્ત્રનામ મંત્રોનો જાપ",
+    "samagri_Gujarati": "પવિત્ર ગંગાજળ, શુદ્ધ મધ, કાચું દૂધ, બિલીપત્ર, સફેદ ચંદન અને ગલગોટાના હાર.",
+    "pandit_Gujarati": "આચાર્ય રમણ શાસ્ત્રી (વારાણસી ગુરુકુળ, 15+ વર્ષનો અનુભવ)",
+    "temple_Gujarati": "પવિત્ર ગંગા કિનારો અને કાશી વિશ્વનાથ, ઉત્તર પ્રદેશ",
+    "prasad_Gujarati": "શુદ્ધ કાશી વિશ્વનાથ લાલ પેંડા બોક્સ, શિવ પોકેટ કાર્ડ અને શુદ્ધ ગંગાજળ બોટલ.",
+    "otherInfo_Gujarati": "વારાણસીમાં તમારી વિશિષ્ટ પૂજા અને નામ જાપનો એક નાનો વિડિયો વ્હોટ્સએપ પર મોકલવામાં આવશે.",
+    "title_Marathi": "रुद्राभिषेक + काशी विश्वनाथ प्रसाद",
+    "tagline_Marathi": "एकाच विधीमध्ये सर्वोच्च वैश्विक संरक्षण आणि काशी मंदिराचे आशीर्वाद मिळवा।",
+    "benefits_Marathi": "• तुमच्या कुटुंबाचे वाईट प्रभाव, कायदेशीर वाद आणि अचानक होणाऱ्या नुकसानापासून रक्षण करते\n• शिव स्तोत्र पठणामुळे घरातील वातावरण शुद्ध होते आणि ग्रहांचे नकारात्मक प्रभाव रोखले जातात\n• काशी स्वयंभू मंदिराचे आशीर्वाद थेट तुमच्या घरात आणते",
+    "steps_Marathi": "• काशीमध्ये तुमच्या नावे, गोत्रासह आणि कुटुंबाच्या माहितीसह संकल्प\n• दूध आणि मधाने पवित्र शिवलिंगावर महारुद्राभिषेक\n• फुलांचा शृंगार आणि सायंकाळी गंगा आरती अर्पण\n• १,००८ शिवसहस्रनाम मंत्रांचे शक्तिशाली पठण",
+    "samagri_Marathi": "पवित्र गंगाजल, शुद्ध मध, कच्चे दूध, बेलपत्र, पांढरे चंदन आणि ताज्या झेंडूच्या फुलांचे हार.",
+    "pandit_Marathi": "आचार्य रुमश शास्त्री (वाराणसी गुरुकुल, १५+ वर्षे अनुभव)",
+    "temple_Marathi": "पवित्र गंगा किनारा आणि काशी विश्वनाथ, उत्तर प्रदेश",
+    "prasad_Marathi": "शुद्ध काशी विश्वनाथ लाल पेढा प्रसाद बॉक्स, अभिमंत्रित शिव लोखंडी पॉकेट कार्ड आणि गंगाजलाची बाटली.",
+    "otherInfo_Marathi": "वाराणसीमधील तुमच्या विशेष पूजेचा और नामस्मरणाचा एक छोटा व्हिडिओ तुमच्या फोनवर पाठवला जाईल.",
+    "title_Tamil": "ருத்ராபிஷேகம் + காசி விஸ்வநாதர் பிரசாதம்",
+    "tagline_Tamil": "ஒரே வழிபாட்டில் உயரிய அண்டப் பாதுகாப்பையும் காசி விஸ்வநாதர் அருளையும் பெறுங்கள்.",
+    "benefits_Tamil": "• உங்கள் குடும்பத்தை எதிர்மறை விளைவுகள், சட்டச் சிக்கல்கள் மற்றும் திடீர் இழப்புகளிலிருந்து காக்கிறது\n• சிவ ஸ்தோத்திர பாராயணம் வீட்டின் வாஸ்து தூய்மையை அதிகரித்து கிரக தோஷங்களை நீக்குகிறது\n• காசி சுயம்பு லிங்கத்தின் ஆசீர்வாதத்தை நேரடியாக உங்கள் வீட்டிற்குள் கொண்டு வருகிறது",
+    "steps_Tamil": "• காசியில் உங்கள் பெயர், கோத்திரம் மற்றும் குடும்ப விவரங்களுடன் சங்கல்பம்\n• தூய பால் மற்றும் தேனால் சிவலிங்கத்திற்கு மகா ருத்ராபிஷேகம்\n• மலர் அலங்காரம் மற்றும் மாலை நேர கங்கா ஆரத்தி அர்ப்பணிப்பு\n• 1,008 சிவ சஹஸ்ரநாம மந்திரங்களின் பக்தி பாராயணம்",
+    "samagri_Tamil": "புனித கங்காஜல், தூய தேன், பசுவின் பால், வில்வ இலைகள், வெள்ளை சந்தனம் மற்றும் சாமந்தி மாலை.",
+    "pandit_Tamil": "ஆச்சார்யா ராமன் சாஸ்திரி (வாரணாசி குருகுலம், 15+ ஆண்டுகள் அனுபவம்)",
+    "temple_Tamil": "புனித கங்கை நதிக்கரை & காசி விஸ்வநாதர் கோவில், உத்தரபிரதேசம்",
+    "prasad_Tamil": "தூய காசி விஸ்வநாதர் லால் பேடா பிரசாதப் பெட்டி, சக்தியூட்டப்பட்ட இரும்பு சிவ அட்டை மற்றும் கங்காஜல் பாட்டில்.",
+    "otherInfo_Tamil": "வாரணாசியில் உங்கள் பெயரில் செய்யப்பட்ட வழிபாட்டின் வீடியோ பதிவு வாட்ஸ்அப்பில் பகிரப்படும்.",
+    "title_Telugu": "రుద్రాభిషేకం + కాశీ విశ్వనాథ్ ప్రసాదం",
+    "tagline_Telugu": "ఒకే సంయుక్త పూజ ద్వారా సంపూర్ణ రక్షణను మరియు కాశీ విశ్వనాథుడి అనుగ్రహాన్ని పొందండి.",
+    "benefits_Telugu": "• మీ గృహాన్ని ప్రతికూల శక్తుల నుండి, కోర్టు వివాదాల నుండి మరియు నష్టాల నుండి రక్షిస్తుంది\n• శివ స్తోత్ర పఠనం ఇంటి వాతావरणాన్ని పవిత్రం చేస్తుంది మరియు దోషాలను తొలగిస్తుంది\n• కాశీ విశ్వనాథుని ఆలయ దైవిక ఆశీస్సులను నేరుగా మీ ఇంట కలిగిస్తుంది",
+    "steps_Telugu": "• కాశీలో మీ పేరు, గోత్రం మరియు కుటుంబ వివరాలతో సంకల్ప పఠనం\n• పాలు మరియు తేనెతో పవిత్ర శివలింగానికి మహా రుద్రాభిషేకం\n• పుష్ప అలంకరణ మరియు సాయంత్రం వేళ గంగా హారతి సమర్పణ\n• 1,008 శివ సహస్రనామ మంత్రాల మహోన్నత పఠనం",
+    "samagri_Telugu": "పవిత్ర గంగాజలం, స్వచ్ఛమైన తేనె, పాలు, బిల్వపత్రాలు, తెల్ల చందనం మరియు బంతిపూల మాలలు.",
+    "pandit_Telugu": "ఆచార్య రమణ శాస్త్రి (వారణాసి గురుకులం, 15+ సంవత్సరాల అనుభవం)",
+    "temple_Telugu": "పవిత్ర గంగా తీరం & కాశీ విశ్వనాథ్ ఆలయం, ఉత్తరప్రదేశ్",
+    "prasad_Telugu": "స్వచ్ఛమైన కాశీ విశ్వనాథ్ లాల్ పేడా ప్రసాదం బాక్స్, పూజించిన శివుని ఇనుప కార్డు మరియు గంగాజలం.",
+    "otherInfo_Telugu": "వారణాసిలో మీ పేరుతో జరిగిన ప్రత్యేక పూజ మరియు సంకల్ప పఠనం యొక్క చిన్న వీడియో క్లిప్ మీకు వాట్సాప్‌లో పంపబడుతుంది."
+  }'::jsonb
+),
+(
+  'Maha Laxmi Kuber Homa + Kamal Gatta Mala', 
+  'Attract extreme financial growth, wipe out debts & bring holy Laxmi Kuber yantras home.', 
+  'https://pub-3027d8d3defe4496978413d3c630aa44.r2.dev/Jai_Mahalakshmi.jpeg', 
+  'https://pub-3027d8d3defe4496978413d3c630aa44.r2.dev/god.png', 
+  '₹751', 
+  '₹1,500', 
+  '4.9', 
+  '850', 
+  'Mahalakshmi Vedic Priests', 
+  'Wealth Combo', 
+  'Ordered by 850+ devotees today',
+  '• Activates continuous inflows of wealth, clears structural debts & blocks sudden money leaks
+• Sandalwood and ghee offerings harmonize Lakshmi Kuber cosmic vibrations
+• Kamal Gatta Mala acts as a magnetic spiritual shield when placed in lockers',
+  '• Dynamic Lakshmi Kuber Havan performed with 108 auspicious lotus seeds
+• Chanting of complete Sri Suktam and Lakshmi Beej mantras 1,008 times
+• Deeparadhana performed with pure aromatic cow ghee
+• Energizing puja performed on the pure Kamal Gatta Mala',
+  'Lotus seeds (Kamalgatta), pure sandalwood paste, organic ghee, dynamic yantra sheet, and fresh lotus flower.',
+  'Pandit Somnath Shastri (12+ years experience in Shri Yantra pujas)',
+  'Mahalakshmi Temple Shrinagar Dham',
+  'Energized 108 Kamal Gatta Mala, sacred dry sweet prasad, and pure Kuber vermilion pocket tilak.',
+  'The Kamal Gatta Mala is placed directly at the altar of Maha Laxmi Shrine overnight to fully absorb financial growth blessings before shipping.',
+  'Single Sankalp', 
+  'Individual name & gotra Sankalp + Holy Prasad transit box.', 
+  'Family Pariwar', 
+  'Full household (4 names) Sankalps + Consecrated copper yantra shield.', 
+  true, 
+  2,
+  '{
+    "title_Hindi": "महा लक्ष्मी कुबेर होम + कमल गट्टा माला",
+    "tagline_Hindi": "अत्यधिक वित्तीय विकास को आकर्षित करें, ऋणों को समाप्त करें और पवित्र लक्ष्मी कुबेर यंत्र को घर लाएं।",
+    "benefits_Hindi": "• धन के निरंतर प्रवाह को सक्रिय करता है, ऋणों को साफ करता है और धन के नुकसान को रोकता है\n• चंदन और घी की आहुतियां लक्ष्मी कुबेर की लौकिक तरंगों को सुसंगत बनाती हैं\n• तिजोरी में रखे जाने पर कमल गट्टा माला एक चुंबकीय आध्यात्मिक ढाल के रूप में कार्य करती है",
+    "steps_Hindi": "• 108 शुभ कमल के बीजों के साथ गतिशील लक्ष्मी कुबेर हवन\n• संपूर्ण श्री सूक्तम और लक्ष्मी बीज मंत्रों का 1,008 बार जाप\n• शुद्ध सुगंधित गाय के घी से दीपाराधना\n• शुद्ध कमल गट्टा माला पर ऊर्जावान पूजा",
+    "samagri_Hindi": "कमल के बीज (कमलगट्टा), शुद्ध चंदन का पेस्ट, जैविक घी, गतिशील यंत्र पत्रक और ताजा कमल का फूल।",
+    "pandit_Hindi": "पंडित सोमनाथ शास्त्री (श्री यंत्र पूजा में 12+ वर्ष का अनुभव)",
+    "temple_Hindi": "महालक्ष्मी मंदिर श्रीनगर धाम",
+    "prasad_Hindi": "अभिमंत्रित 108 कमल गट्टा माला, पवित्र सूखा मीठा प्रसाद और शुद्ध कुबेर सिंदूर पॉकेट तिलक।",
+    "otherInfo_Hindi": "कमल गट्टा माला को शिपिंग से पहले वित्तीय विकास के आशीर्वाद को पूरी तरह से अवशोषित करने के लिए रात भर महा लक्ष्मी मंदिर की वेदी पर रखा जाता है।",
+    "title_Sanskrit": "महालक्ष्मी कुबेर यज्ञः + कमलगट्टा माला",
+    "tagline_Sanskrit": "अत्यधिक-वित्तीय-उन्नतिं प्राप्नोतु, ऋणानि नाशयतु, गृहे लक्ष्मीकुबेरयन्त्रं स्थापयतु च।",
+    "benefits_Sanskrit": "• धनप्रवाहं निरन्तरं करोति, सर्वऋणानि नाशयति, सद्यः धनहानि निवारयति\n• श्रीखण्डगोघृतयोः आहुतयः लक्ष्मीकुबेरयोः ब्रह्माण्डीय-कम्पं गृहं प्रति सन्तुलयन्ति\n• तिजोर्यां स्थापनेन कमलगट्टमाला एका रक्षामयी आर्गैनिककवचरूपेण भवति",
+    "steps_Sanskrit": "• १०८ माङ्गल्यकमलबीजैः सह लक्ष्मीकुबेरयज्ञः\n• श्री सूक्तम् लक्ष्मीबीजमन्त्राणां च १०८ वारम् ओजस्वी जपः\n• शुद्ध सुगन्धित गोघृतेन सह दीपोत्सवः\n• पवित्रायां कमलगट्टमालायाम् अभिषेकपूजा च",
+    "samagri_Sanskrit": "कमलबीजं (कमलगट्टा), शुद्धचन्दनलेपः, आर्गैनिक घृतं, यन्त्रपत्रं, ताजा कमलपुष्पं च।",
+    "pandit_Sanskrit": "पण्डितः सोमनाथ शास्त्री (श्री यन्त्र पूजायां १२+ वर्षाणाम् अनुभवः)",
+    "temple_Sanskrit": "महालक्ष्मी मन्दिर श्रीनगर धाम",
+    "prasad_Sanskrit": "ऊर्जामयी १०८ कमलगट्टमाला, पवित्र शुष्क नैवेद्यं, शुद्ध कुबेर कुङ्कुमं च।",
+    "otherInfo_Sanskrit": "धनसमृद्धेः आशिषः पूर्णतया ग्रहीतुं कमलगट्टमाला प्रेषणात् पूर्वं रात्रौ महालक्ष्मीवेद्यां स्थाप्यते।",
+    "title_Gujarati": "મહા લક્ષ્મી કુબેર હોમ + કમળગટ્ટા માળા",
+    "tagline_Gujarati": "અતયંત આર્થિક વૃદ્ધિ મેળવો, દેવું નાબૂદ કરો અને પવિત્ર લક્ષ્મી કુબેર યંત્ર ઘરમાં સ્થાપિત કરો.",
+    "benefits_Gujarati": "• ઘરમાં ધનનો સતત પ્રવાહ વધારે છે, દેવું નાબૂદ કરે છે અને અણધાર્યા ખર્ચ અટકાવે છે\n• ચંદન અને ઘીની આહુતિઓ લક્ષ્મી કુબેરની પોઝિટિવ એનર્જી લાવે છે\n• તિજોરીમાં રાખવાથી કમળગટ્ટા માળા આધ્યાત્મિક રક્ષણ આપે છે",
+    "steps_Gujarati": "• 108 પવિત્ર કમળના બીજ (કમળગટ્ટા) સાથે લક્ષ્મી કુબેર હવન\n• સંપૂર્ણ શ્રી સૂક્તમ અને લક્ષ્મી બીજ મંત્રોના 1,008 વાર જાપ\n• શુદ્ધ ગાયના ઘીથી આરતી અને આરાધના\n• કમળગટ્ટા માળાને પૂજા કરી સિદ્ધ કરવી",
+    "samagri_Gujarati": "કમળના બીજ (કમળગટ્ટા), શુદ્ધ ચંદન પેસ્ટ, ઓર્ગેનિક ઘી, પૂજન યંત્ર અને તાજું કમળ.",
+    "pandit_Gujarati": "પંડિત સોમનાથ શાસ્ત્રી (શ્રી યંત્ર પૂજામાં 12+ વર્ષનો અનુભવ)",
+    "temple_Gujarati": "મહાલક્ષ્મી મંદિર શ્રીનગર ધામ",
+    "prasad_Gujarati": "સિદ્ધ 108 કમળગટ્ટા માળા, પવિત્ર સાકર પ્રસાદ અને પવિત્ર કુબેર સિંદૂર.",
+    "otherInfo_Gujarati": "આ માળાને મોકલતા પહેલા લક્ષ્મીજીની વેદી પર આખી રાત રાખવામાં આવે છે જેથી ધન પ્રાપ્તિના આશીર્વાદ સંપૂર્ણ મળી શકે.",
+    "title_Marathi": "महालक्ष्मी कुबेर हवन + कमळगट्टा माळ",
+    "tagline_Marathi": "अफाट आर्थिक प्रगती मिळवा, कर्ज नष्ट करा आणि पवित्र लक्ष्मी कुबेर यंत्र घरी आणा।",
+    "benefits_Marathi": "• संपत्तीचा सतत प्रवाह सक्रिय करते, कर्ज दूर करते आणि अचानक होणारे नुकसान थांबवते\n• चंदन आणि तुपाच्या आहुती लक्ष्मी कुबेराच्या दैवी लहरींचे घरात संतुलन राखतात\n• तिजोरीत ठेवल्यास कमळगट्टा माळ एक शक्तिशाली आध्यात्मिक संरक्षण कवच म्हणून कार्य करते",
+    "steps_Marathi": "• १०८ शुभ कमळ बियांसह लक्ष्मी कुबेर हवन\n• संपूर्ण श्री सूक्तम आणि लक्ष्मी बीज मंत्रांचे १,००८ वेळा पठण\n• शुद्ध सुगंधी गाईच्या तुपाने दीपाराधना\n• कमळगट्टा माळेला मंत्रांनी अभिमंत्रित करणे",
+    "samagri_Marathi": "कमळ बी (कमळगट्टा), शुद्ध चंदन पेस्ट, सेंद्रिय तूप, यंत्र आणि ताजे कमळ.",
+    "pandit_Marathi": "पंडित सोमनाथ शास्त्री (श्री यंत्र पूजेमध्ये १२+ वर्षे अनुभव)",
+    "temple_Marathi": "महालक्ष्मी मंदिर श्रीनगर धाम",
+    "prasad_Marathi": "अभिमंत्रित १०८ कमळगट्टा माळ, पवित्र गोड प्रसाद आणि शुद्ध कुबेर सिंदूर पॉकेट टिळक.",
+    "otherInfo_Marathi": "प्रगतीचे आशीर्वाद पूर्णपणे शोषून घेण्यासाठी पाठवण्यापूर्वी माळ रात्रभर महालक्ष्मी मूर्तीच्या चरणी ठेवली जाते.",
+    "title_Tamil": "மகா லட்சுமி குபேர ஹோமம் + தாமரை மணி மாலை",
+    "tagline_Tamil": "அதிகப்படியான நிதி வளர்ச்சியைப் பெறவும், கடன்களை ஒழிக்கவும், லட்சுமி குபேர யந்திரத்தை வீட்டிற்கு கொண்டு வரவும்.",
+    "benefits_Tamil": "• தொடர்ச்சியான செல்வப் பெருக்கைத் தூண்டுகிறது, கடன்களை நீக்குகிறது மற்றும் பண இழப்பைத் தடுக்கிறது\n• சந்தனம் மற்றும் நெய் அர்ப்பணிப்புகள் லட்சுமி குபேரரின் அண்ட அதிர்வுகளைச் சமநிலைப்படுத்துகின்றன\n• பீரோவில் வைக்கும் போது தாமரை மணி மாலை ஒரு காந்த ஆன்மீகக் கவசமாகச் செயல்படுகிறது",
+    "steps_Tamil": "• 108 தாமரை விதைகளைக் கொண்டு சிறப்பான லட்சுமி குபேர யாகம்\n• முழுமையான ஸ்ரீ சூக்தம் மற்றும் லட்சுமி பீஜ மந்திரங்கள் 1,008 முறை பாராயணம்\n• தூய நறுமணப் பசு நெய் கொண்டு தீபாராதனை\n• தாமரை மணி மாலையைச் சக்தியூட்டுவதற்கான சிறப்புப் பூஜை",
+    "samagri_Tamil": "தாமரை விதைகள் (கமல்கட்டா), தூய சந்தனக் கலவை, இயற்கை நெய், யந்திரத் தகடு மற்றும் புதிய தாமரை மலர்.",
+    "pandit_Tamil": "பண்டிட் சோமநாத் சாஸ்திரி (ஸ்ரீ யந்திர பூஜையில் 12+ ஆண்டுகள் அனுபவம்)",
+    "temple_Tamil": "மகாலட்சுமி ஆலயம் ஸ்ரீநகர் தலம்",
+    "prasad_Tamil": "சகதியூட்டப்பட்ட 108 தாமரை மணி மாலை, புனித உலர் இனிப்புப் பிரசாதம் மற்றும் குபேர குங்குமம்.",
+    "otherInfo_Tamil": "செல்வ வள ஆசீர்வாதங்களை முழுமையாக உறிஞ்சுவதற்காகத் தாமரை மணி மாலை அனுப்பப்படுவதற்கு முன்பு இரவு முழுவதும் மகாலட்சுமி சன்னதியில் வைக்கப்படுகிறது.",
+    "title_Telugu": "మహా లక్ష్మీ కుబేర హోమం + కమలగట్ట మాల",
+    "tagline_Telugu": "ఆర్థిక వృద్ధి కోసం, అప్పుల నుండి విముక్తి కోసం మరియు లక్ష్మీ కుబేర యంత్రాన్ని ఇంట ప్రతిష్టించడానికి.",
+    "benefits_Telugu": "• నిరంతర ధన ప్రవాహాన్ని కలిగిస్తుంది, అప్పులను తీరుస్తుంది మరియు ధన నష్టాలను నివారిస్తుంది\n• గంధం మరియు నెయ్యి హోమం లక్ష్మీ కుబేరుల దైవిక శక్తులను గది నిండా వ్యాపిస్తుంది\n• బీరువాలో ఉంచితే కమలగట్ట మాల ఒక ఆధ్యాత్మిక రక్షణ కవచంలా పనిచేస్తుంది",
+    "steps_Telugu": "• 108 తామర గింజలతో దైవిక లక్ష్మీ కుబేర హోమం\n• సంపూర్ణ శ్రీ సూక్తం మరియు లక్ష్మీ బీజ మంత్రాల 1,008 సార్లు జపం\n• స్వచ్ఛమైన ఆవు నెయ్యితో హారతి సమర్పణ\n• పవిత్ర కమలగట్ట మాలను పూజించి శక్తివంతం చేయడం",
+    "samagri_Telugu": "తామర గింజలు (కమలగట్టా), మంచి గంధం పేస్ట్, ఆర్గానిక్ నెయ్యి, దైవిక యంత్రం మరియు తామర పువ్వు.",
+    "pandit_Telugu": "పండిట్ సోమనాథ్ శాస్త్రి (శ్రీ యంత్ర పూజలో 12+ సంవత్సరాల అనుభవం)",
+    "temple_Telugu": "మహాలక్ష్మి ఆలయం శ్రీనగర్ ధామం",
+    "prasad_Telugu": "పూజించిన 108 కమలగట్ట మాల, పవిత్ర ప్రసాదం మరియు కుబేర సింధూరం.",
+    "otherInfo_Telugu": "ఈ మాల పంపడానికి ముందు లక్ష్మీ దేవి పీఠం వద్ద రాత్రంతా ఉంచి ఐశ్వర్య ప్రదాయక శక్తులతో నింపబడుతుంది."
+  }'::jsonb
+);
