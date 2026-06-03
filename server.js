@@ -1,52 +1,79 @@
 /**
- * MantraPuja - Rashifal Horoscope API Server
+ * Standalone General Server Code for Astrology Services (Express.js)
  * 
- * Usage:
- *   node server.js         (default port 4000)
- *   PORT=5000 node server.js
- *
- * Prerequisites: npm install express axios cheerio cors
+ * Mounts Rashi, Panchang, and Kundli API routers, sets up health checks,
+ * and adds error handling middleware.
+ * 
+ * Dependencies:
+ * npm install express cors dotenv
  */
 
 const express = require('express');
 const cors = require('cors');
-const rashifalRouter = require('./rashifalApi');
-const kundliRouter = require('./kundliApi');
-const panchangRouter = require('./panchangApi');
+const dotenv = require('dotenv');
+
+// Load environment variables
+dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 4000;
 
-// Middleware
+// Standard Middlewares
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// Health Check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'MantraPuja Rashifal API', timestamp: new Date().toISOString() });
-});
+// Import Astrology API Routers
+const rashifalRouter = require('./rashifalApi');
+const panchangRouter = require('./panchangApi');
+const kundliRouter = require('./kundliApi');
 
-// Mount the routers
+// Mount Routers
 app.use('/api', rashifalRouter);
-app.use('/api', kundliRouter);
 app.use('/api', panchangRouter);
+app.use('/api', kundliRouter);
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ success: false, error: 'Route not found' });
+// Standard Health Check Endpoint
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        service: 'Astrology API Service',
+        config: {
+            hasUserId: !!process.env.ASTROLOGY_USER_ID,
+            hasApiKey: !!process.env.ASTROLOGY_API_KEY
+        }
+    });
 });
 
-// Error handler
+// Root route welcome message
+app.get('/', (req, res) => {
+    res.send('🌌 Astrology API Service is Running. Mount paths: /api/astrology/horoscope, /api/astrology/panchang, /api/astrology/kundli');
+});
+
+// Catch-all route for unmatched requests (404)
+app.use((req, res, next) => {
+    res.status(404).json({
+        success: false,
+        error: "NOT_FOUND",
+        msg: `Route ${req.method} ${req.url} not found.`
+    });
+});
+
+// Global Error Handling Middleware
 app.use((err, req, res, next) => {
-  console.error('[Server] Unhandled error:', err.message);
-  res.status(500).json({ success: false, error: err.message || 'Internal Server Error' });
+    console.error('💥 [Server Error]:', err.stack || err.message);
+    res.status(err.status || 500).json({
+        success: false,
+        error: err.name || 'INTERNAL_SERVER_ERROR',
+        msg: err.message || 'An unexpected error occurred on the server.'
+    });
 });
 
+const PORT = process.env.PORT || 4000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🔮 MantraPuja Rashifal API running at:`);
-  console.log(`   ➜ Local:    http://localhost:${PORT}`);
-  console.log(`   ➜ Android:  http://10.0.2.2:${PORT}`);
-  console.log(`   ➜ Health:   http://localhost:${PORT}/health`);
-  console.log(`   ➜ Test:     http://localhost:${PORT}/api/astrology/horoscope?sign=aries&period=daily\n`);
+    console.log(`🚀 Astrology API Server running on http://localhost:${PORT}`);
+    console.log(`   - Rashi API:      POST/GET http://localhost:${PORT}/api/astrology/horoscope`);
+    console.log(`   - Panchang API:   POST/GET http://localhost:${PORT}/api/astrology/panchang`);
+    console.log(`   - Kundli API:     POST      http://localhost:${PORT}/api/astrology/kundli`);
 });
+
+module.exports = app;
