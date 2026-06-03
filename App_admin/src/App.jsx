@@ -28,7 +28,8 @@ import {
   Upload,
   ShoppingCart,
   Layers,
-  Calendar
+  Calendar,
+  RefreshCw
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { uploadToR2 } from './lib/r2'
@@ -844,6 +845,7 @@ const HeroManagerPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
@@ -888,16 +890,20 @@ const HeroManagerPage = () => {
     setError('');
     setSuccessMsg('');
 
-    // Revoke previous local preview url to avoid memory leaks
-    if (previewUrl) {
+    // Revoke previous local preview url if it was a blob URL
+    if (previewUrl && previewUrl.startsWith('blob:')) {
       URL.revokeObjectURL(previewUrl);
     }
 
-    const localUrl = URL.createObjectURL(file);
-    setPendingFile(file);
-    setPreviewUrl(localUrl);
-    setBackgroundImage(localUrl);
-    setSuccessMsg('Local preview loaded! Verify it on the device preview simulator. Changes are NOT yet uploaded to Cloudflare.');
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result;
+      setPendingFile(file);
+      setPreviewUrl(dataUrl);
+      setBackgroundImage(dataUrl);
+      setSuccessMsg('Local preview loaded! Verify it on the device preview simulator. Changes are NOT yet uploaded to Cloudflare.');
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSave = async (e) => {
@@ -917,8 +923,11 @@ const HeroManagerPage = () => {
       // Upload the local preview file to Cloudflare R2 on Save
       if (pendingFile) {
         setIsUploading(true);
+        setUploadProgress(0);
         console.log('[Cloudflare R2] Commencing direct Cloudflare upload for confirmed banner background.');
-        finalImageUrl = await uploadToR2(pendingFile, 'hero');
+        finalImageUrl = await uploadToR2(pendingFile, 'hero', (progress) => {
+          setUploadProgress(progress);
+        });
         setIsUploading(false);
       }
 
@@ -964,7 +973,7 @@ const HeroManagerPage = () => {
   };
 
   const handleEdit = (hero) => {
-    if (previewUrl) {
+    if (previewUrl && previewUrl.startsWith('blob:')) {
       URL.revokeObjectURL(previewUrl);
     }
     setPendingFile(null);
@@ -1033,7 +1042,7 @@ const HeroManagerPage = () => {
   };
 
   const handleReset = () => {
-    if (previewUrl) {
+    if (previewUrl && previewUrl.startsWith('blob:')) {
       URL.revokeObjectURL(previewUrl);
     }
     setPendingFile(null);
@@ -1173,7 +1182,7 @@ const HeroManagerPage = () => {
                 {isUploading && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#f59e0b' }}>
                     <Loader2 size={16} className="animate-spin" />
-                    <span>Uploading to Cloudflare...</span>
+                    <span>Uploading to Cloudflare... {uploadProgress}%</span>
                   </div>
                 )}
 
@@ -1310,21 +1319,46 @@ const HeroManagerPage = () => {
               <div style={{ width: '40px', height: '4px', background: '#090d16', borderRadius: '2px' }}></div>
             </div>
 
-            {/* Immersive Top Banner */}
             <div 
               style={{
                 height: '240px',
                 width: '100%',
-                backgroundImage: backgroundImage ? `url(${backgroundImage})` : 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
+                backgroundColor: '#1e293b',
                 position: 'relative',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
-                padding: '1.25rem 1rem 1rem 1rem'
+                padding: '1.25rem 1rem 1rem 1rem',
+                overflow: 'hidden'
               }}
             >
+              {backgroundImage ? (
+                <img 
+                  src={backgroundImage} 
+                  alt="Banner Background"
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    zIndex: 0
+                  }}
+                />
+              ) : (
+                <div 
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+                    zIndex: 0
+                  }}
+                />
+              )}
               {/* Gradient Overlay */}
               <div style={{
                 position: 'absolute',

@@ -516,6 +516,14 @@ export default function HomeScreen() {
       })
       .subscribe();
 
+    const subHomepageHero = supabase
+      .channel(`home_hero_sync_${Math.random().toString(36).substring(7)}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'homepage_hero' }, (payload) => {
+        console.log('[Home Hero] Realtime update received!', payload);
+        loadActiveHero();
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(subscription);
       supabase.removeChannel(subLifeProblems);
@@ -523,6 +531,7 @@ export default function HomeScreen() {
       supabase.removeChannel(subCategoryByProduct);
       supabase.removeChannel(subVideoReviews);
       supabase.removeChannel(subBanners);
+      supabase.removeChannel(subHomepageHero);
     };
   }, []);
 

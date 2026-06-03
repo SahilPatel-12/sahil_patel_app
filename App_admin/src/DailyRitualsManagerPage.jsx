@@ -152,10 +152,25 @@ const SectionPreview = ({ selectedDayVal, dayData, dayCards, onSelectCard, onSwi
       {/* Dynamic Curated Banner Section matching the layout selected */}
       <div style={{
         width: '100%', minHeight: '235px',
-        backgroundImage: `url(${dayData.background_image_url || DEFAULT_BG})`, backgroundSize: 'cover', backgroundPosition: 'center',
+        backgroundColor: '#cbd5e1',
         position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
         padding: '16px 12px 14px 12px', overflow: 'hidden'
       }}>
+        {(dayData.background_image_url || DEFAULT_BG) && (
+          <img 
+            src={dayData.background_image_url || DEFAULT_BG} 
+            alt="Day Background" 
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              zIndex: 0
+            }}
+          />
+        )}
         <div style={{
           position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
           background: 'linear-gradient(to bottom, rgba(0, 18, 31, 0.3) 0%, rgba(0, 18, 31, 0.8) 100%)',
@@ -554,19 +569,23 @@ export default function DailyRitualsManagerPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const localUrl = URL.createObjectURL(file);
-    setDayData(prev => ({ ...prev, background_image_url: localUrl }));
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const dataUrl = reader.result;
+      setDayData(prev => ({ ...prev, background_image_url: dataUrl }));
 
-    setUploadingBg(true);
-    try {
-      const publicUrl = await uploadToR2(file, 'daily-sections');
-      setDayData(prev => ({ ...prev, background_image_url: publicUrl }));
-    } catch (err) {
-      console.error('Background upload failed:', err);
-      alert('Upload failed: ' + err.message);
-    } finally {
-      setUploadingBg(false);
-    }
+      setUploadingBg(true);
+      try {
+        const publicUrl = await uploadToR2(file, 'daily-sections');
+        setDayData(prev => ({ ...prev, background_image_url: publicUrl }));
+      } catch (err) {
+        console.error('Background upload failed:', err);
+        alert('Upload failed: ' + err.message);
+      } finally {
+        setUploadingBg(false);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   // --- Local Card Operations ---
@@ -680,38 +699,46 @@ export default function DailyRitualsManagerPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const localUrl = URL.createObjectURL(file);
-    setEditingPuja(prev => ({ ...prev, thumbnail_url: localUrl }));
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const dataUrl = reader.result;
+      setEditingPuja(prev => ({ ...prev, thumbnail_url: dataUrl }));
 
-    setUploadingThumb(true);
-    try {
-      const publicUrl = await uploadToR2(file, 'daily-thumbnails');
-      setEditingPuja(prev => ({ ...prev, thumbnail_url: publicUrl }));
-    } catch (err) {
-      console.error('Thumbnail upload failed:', err);
-      alert('Upload failed: ' + err.message);
-    } finally {
-      setUploadingThumb(false);
-    }
+      setUploadingThumb(true);
+      try {
+        const publicUrl = await uploadToR2(file, 'daily-thumbnails');
+        setEditingPuja(prev => ({ ...prev, thumbnail_url: publicUrl }));
+      } catch (err) {
+        console.error('Thumbnail upload failed:', err);
+        alert('Upload failed: ' + err.message);
+      } finally {
+        setUploadingThumb(false);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleBannerUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const localUrl = URL.createObjectURL(file);
-    setEditingPuja(prev => ({ ...prev, hero_banner_url: localUrl }));
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const dataUrl = reader.result;
+      setEditingPuja(prev => ({ ...prev, hero_banner_url: dataUrl }));
 
-    setUploadingBanner(true);
-    try {
-      const publicUrl = await uploadToR2(file, 'daily-banners');
-      setEditingPuja(prev => ({ ...prev, hero_banner_url: publicUrl }));
-    } catch (err) {
-      console.error('Banner upload failed:', err);
-      alert('Upload failed: ' + err.message);
-    } finally {
-      setUploadingBanner(false);
-    }
+      setUploadingBanner(true);
+      try {
+        const publicUrl = await uploadToR2(file, 'daily-banners');
+        setEditingPuja(prev => ({ ...prev, hero_banner_url: publicUrl }));
+      } catch (err) {
+        console.error('Banner upload failed:', err);
+        alert('Upload failed: ' + err.message);
+      } finally {
+        setUploadingBanner(false);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleFaqChange = (idx, field, val) => {

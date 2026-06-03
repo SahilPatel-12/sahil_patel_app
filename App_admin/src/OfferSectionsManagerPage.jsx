@@ -140,10 +140,25 @@ const SectionPreview = ({ section, pujas, onSelectPuja }) => {
       {/* Main Curated Section Feed Banner matching the exact reference image */}
       <div style={{
         marginTop: '10px', width: '100%', minHeight: '235px',
-        backgroundImage: `url(${bgImg})`, backgroundSize: 'cover', backgroundPosition: 'center',
+        backgroundColor: '#cbd5e1',
         position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
         padding: '16px 12px 14px 12px', overflow: 'hidden'
       }}>
+        {bgImg && (
+          <img 
+            src={bgImg} 
+            alt="Section Background" 
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              zIndex: 0
+            }}
+          />
+        )}
         {/* Dynamic Dark Gradient Overlay matching public.offer_sections */}
         <div style={{
           position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
@@ -713,26 +728,29 @@ export default function OfferSectionsManagerPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Fast Responsive Local Object URL Preview
-    const localUrl = URL.createObjectURL(file);
-    setSectionForm(prev => ({
-      ...prev,
-      background_image_url: localUrl
-    }));
-
-    setUploadingBg(true);
-    try {
-      const publicUrl = await uploadToR2(file, 'sections');
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const dataUrl = reader.result;
       setSectionForm(prev => ({
         ...prev,
-        background_image_url: publicUrl
+        background_image_url: dataUrl
       }));
-    } catch (err) {
-      console.error('Bg upload error:', err);
-      alert('Background upload failed: ' + err.message);
-    } finally {
-      setUploadingBg(false);
-    }
+
+      setUploadingBg(true);
+      try {
+        const publicUrl = await uploadToR2(file, 'sections');
+        setSectionForm(prev => ({
+          ...prev,
+          background_image_url: publicUrl
+        }));
+      } catch (err) {
+        console.error('Bg upload error:', err);
+        alert('Background upload failed: ' + err.message);
+      } finally {
+        setUploadingBg(false);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   // --- Unified Transactional Save and Publish Process ---
@@ -1198,52 +1216,58 @@ export default function OfferSectionsManagerPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Fast Responsive Local Object URL Preview
-    const localUrl = URL.createObjectURL(file);
-    setEditingPuja(prev => ({
-      ...prev,
-      thumbnail_url: localUrl
-    }));
-
-    setUploadingThumb(true);
-    try {
-      const publicUrl = await uploadToR2(file, 'thumbnails');
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const dataUrl = reader.result;
       setEditingPuja(prev => ({
         ...prev,
-        thumbnail_url: publicUrl
+        thumbnail_url: dataUrl
       }));
-    } catch (err) {
-      console.error('Thumb upload error:', err);
-      alert('Thumbnail upload failed: ' + err.message);
-    } finally {
-      setUploadingThumb(false);
-    }
+
+      setUploadingThumb(true);
+      try {
+        const publicUrl = await uploadToR2(file, 'thumbnails');
+        setEditingPuja(prev => ({
+          ...prev,
+          thumbnail_url: publicUrl
+        }));
+      } catch (err) {
+        console.error('Thumb upload error:', err);
+        alert('Thumbnail upload failed: ' + err.message);
+      } finally {
+        setUploadingThumb(false);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleBannerUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Fast Responsive Local Object URL Preview
-    const localUrl = URL.createObjectURL(file);
-    setEditingPuja(prev => ({
-      ...prev,
-      hero_banner_url: localUrl
-    }));
-
-    setUploadingBanner(true);
-    try {
-      const publicUrl = await uploadToR2(file, 'banners');
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const dataUrl = reader.result;
       setEditingPuja(prev => ({
         ...prev,
-        hero_banner_url: publicUrl
+        hero_banner_url: dataUrl
       }));
-    } catch (err) {
-      console.error('Banner upload error:', err);
-      alert('Banner upload failed: ' + err.message);
-    } finally {
-      setUploadingBanner(false);
-    }
+
+      setUploadingBanner(true);
+      try {
+        const publicUrl = await uploadToR2(file, 'banners');
+        setEditingPuja(prev => ({
+          ...prev,
+          hero_banner_url: publicUrl
+        }));
+      } catch (err) {
+        console.error('Banner upload error:', err);
+        alert('Banner upload failed: ' + err.message);
+      } finally {
+        setUploadingBanner(false);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   // --- FAQ management inside local editor ---
