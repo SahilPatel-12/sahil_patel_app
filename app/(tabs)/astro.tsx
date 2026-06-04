@@ -21,6 +21,7 @@ import Svg, { Line, Path, Text as SvgText, SvgXml } from "react-native-svg";
 import Constants from "expo-constants";
 import { safeStorage } from "../../services/storage";
 import { supabase } from "../../services/supabase";
+import { requestAstro } from "../../services/api";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -276,64 +277,27 @@ export default function AstroScreen() {
     return m[p]?.[loc]||m[p]?.en||p;
   };
 
-  const getBackendHosts = () => {
-    const list = ["localhost:4000", "10.0.2.2:4000"];
-    const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest?.hostUri;
-    const ip = hostUri ? hostUri.split(":")[0] : null;
-    if (ip) {
-      list.unshift(`${ip}:4000`);
-    }
-    // Fallback IPs
-    if (!list.includes("10.47.158.92:4000")) list.push("10.47.158.92:4000");
-    if (!list.includes("10.169.33.92:4000")) list.push("10.169.33.92:4000");
-    if (!list.includes("10.141.35.92:4000")) list.push("10.141.35.92:4000");
-    return list;
-  };
-
   const fetchHoroscope = async (signId: string, per: string) => {
     setLoading(true); setExpanded(false);
     try {
-      const hosts = getBackendHosts();
-      let found = null;
-      for (const host of hosts) {
-        try {
-          const ctrl = new AbortController();
-          const tid = setTimeout(()=>ctrl.abort(), 2500);
-          const res = await fetch(`http://${host}/api/astrology/horoscope?sign=${signId}&period=${per}`, {signal:ctrl.signal});
-          clearTimeout(tid);
-          if (res.ok) { const j=await res.json(); if(j.success&&j.data){found=j.data;break;} }
-        } catch(_){}
-      }
-      setHData(found??getOffline(signId,per));
-    } catch(_){ setHData(getOffline(signId,per)); }
-    finally{ setLoading(false); }
+      const data = await requestAstro(`horoscope?sign=${signId}&period=${per}`);
+      setHData(data);
+    } catch(err){
+      console.error("[Astro Screen] fetchHoroscope failed, fallback to offline", err);
+      setHData(getOffline(signId,per));
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(()=>{ fetchHoroscope(sign.id, period); }, [sign, period]);
 
   const fetchPanchang = async () => {
     setPanchangLoading(true);
     try {
-      const hosts = getBackendHosts();
-      let found = null;
-      for (const host of hosts) {
-        try {
-          const ctrl = new AbortController();
-          const tid = setTimeout(() => ctrl.abort(), 4000);
-          const res = await fetch(`http://${host}/api/astrology/panchang`, { signal: ctrl.signal });
-          clearTimeout(tid);
-          if (res.ok) {
-            const j = await res.json();
-            if (j.success && j.data) {
-              found = j.data;
-              break;
-            }
-          }
-        } catch (_) {}
-      }
-      if (found) {
-        setPanchangData(found);
-      }
-    } catch (_) {
+      const data = await requestAstro("panchang");
+      setPanchangData(data);
+    } catch (err) {
+      console.error("[Astro Screen] fetchPanchang failed", err);
     } finally {
       setPanchangLoading(false);
     }
@@ -416,9 +380,6 @@ export default function AstroScreen() {
 
     setKundliLoading(true);
     try {
-      const hosts = getBackendHosts();
-      let found = null;
-
       const payload = {
         birthData: {
           day: dayToUse,
@@ -435,28 +396,10 @@ export default function AstroScreen() {
         language: "en",
       };
 
-      for (const host of hosts) {
-        try {
-          const ctrl = new AbortController();
-          const tid = setTimeout(() => ctrl.abort(), 6000);
-          const res = await fetch(`http://${host}/api/astrology/kundli`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(payload),
-            signal: ctrl.signal,
-          });
-          clearTimeout(tid);
-          if (res.ok) {
-            const j = await res.json();
-            if (j.success && j.data) {
-              found = j.data;
-              break;
-            }
-          }
-        } catch (_) {}
-      }
+      const found = await requestAstro("kundli", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
 
       if (found) {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);

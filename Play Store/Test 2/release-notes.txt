@@ -1,0 +1,9 @@
+MantraPuja — Release Notes (Test 2 Build)
+=========================================
+
+What's New in this Release:
+- Migrated Rashifal (Horoscope), Vedic Panchang, and Janam Kundli to the correct production server paths.
+- Implemented robust client-side response parsing to seamlessly handle unwrapped flat JSON payloads returned by production Panchang and Rashifal endpoints.
+- Re-implemented the server-side Next.js Kundli API proxy to query AstrologyAPI directly in parallel with DB-cached credentials and priority failover, resolving the "fetch failed" HTTP 500 error and removing the dependency on port 4000 Express container.
+- Bumped mobile client request timeout to 25 seconds to provide ample time for birth chart calculation and sequential AstroAPI compilation.
+- Increment Version Code to 2 to support deployment to Google Play Console testing tracks.

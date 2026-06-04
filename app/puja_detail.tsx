@@ -2141,33 +2141,40 @@ export default function PujaDetailScreen() {
             </View>
 
             {/* Dynamic quantity +/- selectors synced to global cart state */}
-            <View style={styles.quantitySelectorContainer}>
+            {quantityInCart === 0 ? (
               <TouchableOpacity
-                onPress={() => {
-                  if (quantityInCart > 0) {
-                    handleDecrement(puja.id);
-                  }
-                }}
-                style={styles.quantityBtn}
-                activeOpacity={0.7}
+                onPress={() => handleAddToCart(puja.id)}
+                style={styles.addToCartPillButton}
+                activeOpacity={0.8}
               >
-                <Ionicons name="remove" size={16} color="#ffffff" />
+                <Text style={styles.addToCartPillText}>{t('ADD')}</Text>
+                <Ionicons name="add" size={14} color="#ffffff" style={{ marginLeft: 4 }} />
               </TouchableOpacity>
-              <Text style={styles.quantityCountText}>{quantityInCart || 1}</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  if (quantityInCart === 0) {
-                    handleAddToCart(puja.id);
-                  } else {
+            ) : (
+              <View style={styles.quantitySelectorContainer}>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (quantityInCart > 0) {
+                      handleDecrement(puja.id);
+                    }
+                  }}
+                  style={styles.quantityBtn}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="remove" size={16} color="#ffffff" />
+                </TouchableOpacity>
+                <Text style={styles.quantityCountText}>{quantityInCart}</Text>
+                <TouchableOpacity
+                  onPress={() => {
                     handleIncrement(puja.id);
-                  }
-                }}
-                style={styles.quantityBtn}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="add" size={16} color="#ffffff" />
-              </TouchableOpacity>
-            </View>
+                  }}
+                  style={styles.quantityBtn}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="add" size={16} color="#ffffff" />
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
 
@@ -2720,6 +2727,22 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
     fontFamily: 'Outfit-ExtraBold',
     color: '#000000',
+  },
+  addToCartPillButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ea580c', // Bright saffron theme
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    minHeight: 36,
+    minWidth: 80,
+  },
+  addToCartPillText: {
+    fontSize: 14,
+    fontFamily: 'Outfit-Bold',
+    color: '#ffffff',
   },
   quantitySelectorContainer: {
     flexDirection: 'row',

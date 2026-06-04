@@ -1,0 +1,12 @@
+MantraPuja — Release Notes (Test 1 Build)
+=========================================
+
+What's New in this Release:
+- Complete migration of Rashifal (Horoscope), Vedic Panchang, and Kundli APIs to the official AstrologyAPI integrations, replacing unstable web scrapers.
+- Refactored Kundli compilation endpoints to execute in parallel, reducing average latency from 10+ seconds down to under 1.5 seconds.
+- Seeded 6 Life Problem categories and 18 high-fidelity pujas into the database.
+- Implemented robust UI updates in the Mobile App to render the 6th category ("Education") and optimized loading performance on all categories using Expo Image components.
+- Fixed temple bell playback mechanism to replay cleanly on every tap.
+- Configured secure fallback credentials for out-of-the-box operations.
+- Resolved Gradle compiling environment pathing and AAPT2 JPEG asset compilation crashes.
+- Compiled signed production release versions (APK and AAB) with full Proguard/R8 minification and optimizations.
