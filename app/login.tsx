@@ -58,6 +58,7 @@ export default function LoginScreen() {
   const [name, setName] = useState('');
   const [dob, setDob] = useState('');
   const [email, setEmail] = useState('');
+  const [referredByCode, setReferredByCode] = useState('');
   const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0]);
   const [showCountryModal, setShowCountryModal] = useState(false);
   const [error, setError] = useState('');
@@ -203,6 +204,44 @@ export default function LoginScreen() {
     };
   }, [step, generatedOtp, otp]);
 
+  // Clipboard/Deep Link auto-fill for Referral Code
+  useEffect(() => {
+    if (step !== 'INFO') return;
+
+    const checkReferralSources = async () => {
+      try {
+        // 1. Check if there is a pending code in safeStorage (from deep link)
+        const pendingCode = await safeStorage.getItem('pending_referral_code');
+        if (pendingCode) {
+          console.log('[Login] Found pending deep link referral code:', pendingCode);
+          setReferredByCode(pendingCode);
+          // Clear it so we don't reuse it next time
+          await safeStorage.removeItem('pending_referral_code');
+          return;
+        }
+
+        // 2. Check clipboard
+        const hasString = await Clipboard.hasStringAsync();
+        if (hasString) {
+          const text = await Clipboard.getStringAsync();
+          if (text) {
+            // Match MPXXXXXX or code=MPXXXXXX or refer?code=MPXXXXXX
+            const match = text.match(/code=([a-zA-Z0-9_-]+)/i) || text.match(/\b(MP[a-zA-Z0-9]{6})\b/i);
+            if (match && match[1]) {
+              const matchedCode = match[1].toUpperCase();
+              console.log('[Login] Auto-filling referral code from clipboard:', matchedCode);
+              setReferredByCode(matchedCode);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Error checking referral sources:', err);
+      }
+    };
+
+    checkReferralSources();
+  }, [step]);
+
   const handleNext = async () => {
     console.log('Button Pressed, current phone length:', phone.length);
     if (step === 'PHONE') {
@@ -219,16 +258,8 @@ export default function LoginScreen() {
             setGeneratedOtp(code);
             setStep('OTP');
             
-            // Auto-fill OTP in Dev/Sandbox/Testing mode so the developer or tester gets verified instantly
-            if (res.message.includes('OTP is') || __DEV__) {
-              setOtp(code);
-              // In dev mode, we can also trigger verification automatically after a minor delay
-              setTimeout(() => {
-                verifyOtpCode(code, code);
-              }, 500);
-            }
-
-            if (res.message.includes('[Dev Mode Sandbox]')) {
+            setOtp('');
+            if (res.message.includes('OTP is') || res.message.includes('Dev Mode')) {
               setError(res.message);
             } else {
               setError('');
@@ -262,6 +293,7 @@ export default function LoginScreen() {
                 name: name.trim(),
                 email: email.trim() || null,
                 dob: dob.trim() || null,
+                referred_by_code: referredByCode.trim() || null,
                 updated_at: new Date().toISOString()
               },
               { onConflict: 'phone' }
@@ -303,15 +335,8 @@ export default function LoginScreen() {
       if (res.success) {
         setGeneratedOtp(code);
         
-        // Auto-fill OTP in Dev/Sandbox/Testing mode so the developer or tester gets verified instantly
-        if (res.message.includes('OTP is') || __DEV__) {
-          setOtp(code);
-          setTimeout(() => {
-            verifyOtpCode(code, code);
-          }, 500);
-        }
-
-        if (res.message.includes('[Dev Mode Sandbox]')) {
+        setOtp('');
+        if (res.message.includes('OTP is') || res.message.includes('Dev Mode')) {
           setError(res.message);
         } else {
           setError(t('Verification code resent successfully.'));
@@ -491,6 +516,17 @@ export default function LoginScreen() {
                   value={email}
                   onChangeText={setEmail}
                   keyboardType="email-address"
+                />
+              </View>
+              <View style={styles.fieldItem}>
+                <Ionicons name="gift-outline" size={18} color={Colors.saffron.DEFAULT} />
+                <TextInput
+                  style={styles.fieldInput}
+                  placeholder={t('Referral Code (Optional)')}
+                  placeholderTextColor="#a1a1aa"
+                  value={referredByCode}
+                  onChangeText={(text) => setReferredByCode(text.toUpperCase())}
+                  autoCapitalize="characters"
                 />
               </View>
             </View>

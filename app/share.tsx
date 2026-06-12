@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -10,13 +10,16 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
-  Clipboard
+  Clipboard,
+  Share
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLanguage } from '../context/LanguageContext';
+import { safeStorage } from '../services/storage';
+import { supabase } from '../services/supabase';
 
 const { width } = Dimensions.get('window');
 
@@ -30,7 +33,48 @@ export default function ShareScreen() {
   const [copied, setCopied] = useState(false);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
   
-  const referralCode = 'DIVINE50';
+  const [referralCode, setReferralCode] = useState('MP-DEFAULT');
+  const [referralsCount, setReferralsCount] = useState(0);
+  const [coinsEarned, setCoinsEarned] = useState(0);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const sessionData = await safeStorage.getItem('user_session');
+        if (sessionData) {
+          const user = JSON.parse(sessionData);
+          setUserId(user.id);
+          
+          // Query latest profile details
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .maybeSingle();
+            
+          if (profile) {
+            setReferralCode(profile.referral_code || 'MP-DEFAULT');
+          }
+
+          // Fetch user referrals count and earned coins
+          const { data: refs, error: refsErr } = await supabase
+            .from('user_referrals')
+            .select('reward_coins')
+            .eq('referrer_id', user.id);
+            
+          if (!refsErr && refs) {
+            setReferralsCount(refs.length);
+            const totalCoins = refs.reduce((acc: number, curr: any) => acc + curr.reward_coins, 0);
+            setCoinsEarned(totalCoins);
+          }
+        }
+      } catch (err) {
+        console.warn('Error loading user session in share:', err);
+      }
+    };
+    loadUserData();
+  }, []);
 
   const handleCopyCode = () => {
     Clipboard.setString(referralCode);
@@ -42,13 +86,24 @@ export default function ShareScreen() {
     }, 2000);
   };
 
-  const triggerShareAction = (platform: string) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setShareStatus(`${t('Spreading holy blessings via')} ${platform}!`);
-    setTimeout(() => {
+  const triggerShareAction = async (platform: string) => {
+    const inviteLink = `mantrapuja://refer?code=${referralCode}`;
+    const playStoreLink = `https://play.google.com/store/apps/details?id=com.mantrapuja.official`;
+    const shareMessage = `${t('Join me on Mantra Puja, the ultimate devotional application. Use my referral code')} ${referralCode} ${t('during sign up to get bonus coins!')}\n\n${t('Download now:')} ${playStoreLink}\n${t('Or open directly:')} ${inviteLink}`;
+
+    try {
+      await Share.share({
+        message: shareMessage,
+      });
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setShareStatus(null);
-    }, 2500);
+      setShareStatus(`${t('Shared successfully via')} ${platform}!`);
+      setTimeout(() => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setShareStatus(null);
+      }, 2500);
+    } catch (err: any) {
+      console.warn('Error sharing:', err.message);
+    }
   };
 
   return (
@@ -93,19 +148,19 @@ export default function ShareScreen() {
           <Text style={styles.invitationTitle}>{t('Invite Friends & Earn Free Coins')}</Text>
           
           <Text style={styles.invitationDesc}>
-            {t('Share the sacred experience of Mantra Puja. When your friends register using your unique link, they instantly receive')} <Text style={styles.boldGlow}>100 {t('Free Coins')}</Text> {t('and you earn')} <Text style={styles.boldGlow}>50 {t('Coins')}</Text> {t('for every successful refer!')}
+            {t('Share the sacred experience of Mantra Puja. When your friends register using your unique referral code, they instantly receive')} <Text style={styles.boldGlow}>50 {t('Free Coins')}</Text> {t('and you earn')} <Text style={styles.boldGlow}>100 {t('Coins')}</Text> {t('as a reward for every successful refer!')}
           </Text>
 
           <View style={styles.cardDividerGlow} />
 
           <View style={styles.statsMiniRow}>
             <View style={styles.statBox}>
-              <Text style={styles.statVal}>8</Text>
+              <Text style={styles.statVal}>{referralsCount}</Text>
               <Text style={styles.statLabel}>{t('FRIENDS INVITED')}</Text>
             </View>
             <View style={styles.statBoxBorder} />
             <View style={styles.statBox}>
-              <Text style={styles.statVal}>400</Text>
+              <Text style={styles.statVal}>{coinsEarned}</Text>
               <Text style={styles.statLabel}>{t('COINS EARNED')}</Text>
             </View>
           </View>
@@ -204,11 +259,16 @@ export default function ShareScreen() {
 
             {/* Stepper Progress */}
             <View style={styles.progressSliderBg}>
-              <View style={[styles.progressSliderFill, { width: '80%' }]} />
+              <View style={[styles.progressSliderFill, { width: `${Math.min(100, (referralsCount / 10) * 100)}%` }]} />
             </View>
             <View style={styles.progressSliderMetrics}>
-              <Text style={styles.progressSliderText}>8 {t('referred')}</Text>
-              <Text style={styles.progressSliderTextBold}>2 {t('more to go')}</Text>
+              <Text style={styles.progressSliderText}>{referralsCount} {t('referred')}</Text>
+              <Text style={styles.progressSliderTextBold}>
+                {referralsCount >= 10 
+                  ? t('Milestone unlocked!') 
+                  : `${10 - referralsCount} ${t('more to go')}`
+                }
+              </Text>
             </View>
           </View>
         </View>

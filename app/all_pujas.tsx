@@ -334,7 +334,7 @@ export default function AllPujasScreen() {
 
   return (
     <View style={styles.mainContainer}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="dark-content" />
 
       {/* Top Banner Header Section — Full-width custom banner image */}
       <View style={styles.headerContainer}>

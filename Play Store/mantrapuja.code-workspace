@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"name": "mantrapuja",
+			"path": ".."
+		},
+		{
+			"name": "standalone-astrology-api",
+			"path": "../../../../MMMPPP/mantrapujaAll/standalone-astrology-api"
+		}
+	],
+	"settings": {}
+}

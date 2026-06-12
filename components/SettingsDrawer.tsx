@@ -12,6 +12,7 @@ import { router } from 'expo-router';
 import { Image } from 'expo-image';
 import { useLanguage } from '../context/LanguageContext';
 import { safeStorage } from '../services/storage';
+import { supabase } from '../services/supabase';
 
 const { width, height } = Dimensions.get('window');
 const DRAWER_WIDTH = width * 0.8;
@@ -40,6 +41,7 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
   const [profileName, setProfileName] = useState('Guest');
   const [profileEmail, setProfileEmail] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number>(50);
 
   useEffect(() => {
     if (isOpen) {
@@ -53,10 +55,26 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
             else setProfileEmail('');
             if (parsed.avatar_url) setAvatarUrl(parsed.avatar_url);
             else setAvatarUrl(null);
+
+            // Fetch wallet balance
+            const { data } = await supabase
+              .from('user_wallets')
+              .select('balance')
+              .eq('user_id', parsed.id)
+              .maybeSingle();
+
+            if (data) {
+              setWalletBalance(data.balance);
+            } else {
+              // Self-heal
+              await supabase.from('user_wallets').upsert({ user_id: parsed.id, balance: 50 });
+              setWalletBalance(50);
+            }
           } else {
             setProfileName('Guest');
             setProfileEmail('');
             setAvatarUrl(null);
+            setWalletBalance(50);
           }
         } catch (err) {
           console.error('Error loading session in SettingsDrawer:', err);
@@ -150,10 +168,16 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
               <Text style={styles.statValue}>12</Text>
               <Text style={styles.statLabel}>{t('Puja Done')}</Text>
             </View>
-            <View style={[styles.statItem, styles.statBorder]}>
-              <Text style={styles.statValue}>240</Text>
+            <TouchableOpacity 
+              style={[styles.statItem, styles.statBorder]}
+              onPress={() => {
+                onClose();
+                router.push('/wallet');
+              }}
+            >
+              <Text style={styles.statValue}>{walletBalance}</Text>
               <Text style={styles.statLabel}>{t('Coins')}</Text>
-            </View>
+            </TouchableOpacity>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>4.8</Text>
               <Text style={styles.statLabel}>{t('Rating')}</Text>
@@ -169,10 +193,14 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
                 activeOpacity={0.7}
                 onPress={() => {
                   onClose();
-                  router.push({
-                    pathname: '/settings_detail',
-                    params: { type: item.label.toLowerCase().replace(/\s+/g, '_') }
-                  });
+                  if (item.label === 'My Wallet') {
+                    router.push('/wallet');
+                  } else {
+                    router.push({
+                      pathname: '/settings_detail',
+                      params: { type: item.label.toLowerCase().replace(/\s+/g, '_') }
+                    });
+                  }
                 }}
               >
                 <View style={[styles.iconBox, item.color ? { backgroundColor: item.color + '15' } : { backgroundColor: '#f1f5f9' }]}>

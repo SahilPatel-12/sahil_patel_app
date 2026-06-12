@@ -5,6 +5,9 @@ import { useFonts, Outfit_400Regular, Outfit_600SemiBold, Outfit_700Bold, Outfit
 import { DrawerProvider } from "../context/DrawerContext";
 import { CartProvider } from "../context/CartContext";
 import { LanguageProvider } from "../context/LanguageContext";
+import * as Linking from 'expo-linking';
+import { safeStorage } from '../services/storage';
+import { registerForPushNotificationsAsync, registerNotificationListeners } from '../services/notifications';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -16,6 +19,49 @@ export default function RootLayout() {
     'Outfit-Bold': Outfit_700Bold,
     'Outfit-ExtraBold': Outfit_800ExtraBold,
   });
+
+  useEffect(() => {
+    // Register for push notifications on app startup
+    registerForPushNotificationsAsync();
+
+    // Set up notification foreground & selection listeners
+    const cleanupListeners = registerNotificationListeners(
+      (notification) => {
+        console.log('[RootLayout] Push notification received in foreground:', notification.request.content.title);
+      },
+      (response) => {
+        console.log('[RootLayout] User clicked push notification:', response.notification.request.content.title);
+      }
+    );
+
+    const handleDeepLink = async (url: string | null) => {
+      if (!url) return;
+      try {
+        const parsed = Linking.parse(url);
+        console.log('[Deep Linking] Received URL:', url, 'Parsed:', parsed);
+        if (parsed.queryParams && parsed.queryParams.code) {
+          const code = parsed.queryParams.code as string;
+          console.log('[Deep Linking] Saving pending referral code:', code);
+          await safeStorage.setItem('pending_referral_code', code);
+        }
+      } catch (err) {
+        console.warn('Error parsing deep link:', err);
+      }
+    };
+
+    // Check initial launch URL
+    Linking.getInitialURL().then(handleDeepLink);
+
+    // Listen to incoming URLs when app is running
+    const subscription = Linking.addEventListener('url', (event) => {
+      handleDeepLink(event.url);
+    });
+
+    return () => {
+      subscription.remove();
+      cleanupListeners();
+    };
+  }, []);
 
   useEffect(() => {
     if (loaded || error) {

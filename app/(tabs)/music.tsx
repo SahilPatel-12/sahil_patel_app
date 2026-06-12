@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { bhajanSupabase } from '../../services/bhajanSupabase';
+import DraggableCalendarButton from "../../components/DraggableCalendarButton";
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -582,6 +583,7 @@ export default function MusicScreen() {
         {/* Spacer */}
         <View style={{ height: 100 }} />
       </ScrollView>
+      <DraggableCalendarButton />
     </View>
   );
 }

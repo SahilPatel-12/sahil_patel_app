@@ -29,7 +29,8 @@ import {
   ShoppingCart,
   Layers,
   Calendar,
-  RefreshCw
+  RefreshCw,
+  Sparkles
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { uploadToR2 } from './lib/r2'
@@ -44,6 +45,11 @@ import VideoReviewsManagerPage from './VideoReviewsManagerPage'
 import PanditVideosManagerPage from './PanditVideosManagerPage'
 import BannersManagerPage from './BannersManagerPage'
 import PujaBannersManagerPage from './PujaBannersManagerPage'
+import GodImagesManagerPage from './GodImagesManagerPage'
+import PujaItemsManagerPage from './PujaItemsManagerPage'
+import SpiritualCalendarManagerPage from './SpiritualCalendarManagerPage'
+import PushNotificationsManagerPage from './PushNotificationsManagerPage'
+import AstroApiManagerPage from './AstroApiManagerPage'
 import './App.css'
 
 // --- Components ---
@@ -57,6 +63,8 @@ const Sidebar = ({ onLogout }) => {
     { name: 'Homepage Hero', path: '/hero', icon: <Image size={20} /> },
     { name: 'App Banners', path: '/banners', icon: <Image size={20} /> },
     { name: 'Puja Banner', path: '/puja-banner', icon: <Layers size={20} /> },
+    { name: "God's Gallery", path: '/god-images', icon: <Sparkles size={20} /> },
+    { name: "Puja Items", path: '/puja-items', icon: <Layers size={20} /> },
     { name: 'Video Reviews', path: '/video-reviews', icon: <MessageSquare size={20} /> },
     { name: 'Pandit Videos', path: '/pandit-videos', icon: <Video size={20} /> },
     { name: 'Users', path: '/users', icon: <Users size={20} /> },
@@ -66,6 +74,9 @@ const Sidebar = ({ onLogout }) => {
     { name: 'Problem Solutions', path: '/problem-solutions', icon: <Activity size={20} /> },
     { name: 'Offer Sections', path: '/offer-sections', icon: <Layers size={20} /> },
     { name: 'Daily Rituals', path: '/daily-rituals', icon: <Calendar size={20} /> },
+    { name: 'Spiritual Calendar', path: '/spiritual-calendar', icon: <Calendar size={20} /> },
+    { name: 'Push Notifications', path: '/push-notifications', icon: <Bell size={20} /> },
+    { name: 'Astro APIs', path: '/astro-api', icon: <Server size={20} /> },
     { name: 'Analytics', path: '/analytics', icon: <BarChart3 size={20} /> },
     { name: 'Settings', path: '/settings', icon: <Settings size={20} /> },
   ];
@@ -315,8 +326,11 @@ const Dashboard = () => {
 const UsersPage = () => {
   const [users, setUsers] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [wallets, setWallets] = useState([]);
+  const [referrals, setReferrals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [subTab, setSubTab] = useState('users'); // 'users' or 'referrals'
 
   const initData = async () => {
     setLoading(true);
@@ -336,8 +350,29 @@ const UsersPage = () => {
 
       if (ordersError) throw ordersError;
 
+      // Fetch user wallets
+      const { data: walletsData, error: walletsError } = await supabase
+        .from('user_wallets')
+        .select('*');
+
+      if (walletsError) {
+        console.warn('Error fetching wallets:', walletsError);
+      }
+
+      // Fetch all referrals
+      const { data: referralsData, error: referralsError } = await supabase
+        .from('user_referrals')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (referralsError) {
+        console.warn('Error fetching referrals:', referralsError);
+      }
+
       setUsers(profilesData || []);
       setOrders(ordersData || []);
+      setWallets(walletsData || []);
+      setReferrals(referralsData || []);
     } catch (err) {
       console.error('Error fetching admin users/profiles:', err);
     } finally {
@@ -348,6 +383,46 @@ const UsersPage = () => {
   useEffect(() => {
     initData();
   }, []);
+
+  const handleAdjustCoins = async (userId, currentBalance) => {
+    const amountStr = window.prompt(`Adjust coins for user. Current balance: ${currentBalance}.\nEnter new absolute coin balance (e.g. 100):`, currentBalance.toString());
+    if (amountStr === null) return;
+    
+    const amount = parseInt(amountStr);
+    if (isNaN(amount) || amount < 0) {
+      alert("Invalid coin balance entered.");
+      return;
+    }
+
+    try {
+      const newBalance = amount;
+      
+      const { error } = await supabase
+        .from('user_wallets')
+        .upsert({ user_id: userId, balance: newBalance, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+
+      if (error) throw error;
+      
+      // Log transaction
+      const { error: txError } = await supabase
+        .from('coin_transactions')
+        .insert([{
+          user_id: userId,
+          amount: newBalance - currentBalance,
+          type: 'admin_adjustment'
+        }]);
+
+      if (txError) {
+        console.warn('Error creating transaction:', txError);
+      }
+
+      alert("Devotee's coin balance successfully updated!");
+      initData();
+    } catch (err) {
+      console.error('Error adjusting coins:', err);
+      alert("Failed to adjust coins: " + err.message);
+    }
+  };
 
   // Aggregate user stats in memory
   const userStats = {};
@@ -399,80 +474,190 @@ const UsersPage = () => {
         <div className="glass-card stat-card">
           <div className="stat-icon blue"><ShoppingCart size={24} /></div>
           <div className="stat-info">
-            <h3>
-              {orders.length}
-            </h3>
+            <h3>{orders.length}</h3>
             <p>Total Placed Orders</p>
           </div>
         </div>
-      </div>
-
-      {/* Search Input */}
-      <div className="glass-card filter-card">
-        <div className="search-bar-container w-full">
-          <Search size={18} className="search-icon" />
-          <input
-            type="text"
-            placeholder="Search devotees by full name, phone number, email..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        <div className="glass-card stat-card">
+          <div className="stat-icon orange"><Sparkles size={24} /></div>
+          <div className="stat-info">
+            <h3>{referrals.length}</h3>
+            <p>Successful Referrals</p>
+          </div>
         </div>
       </div>
 
-      {/* Devotees Grid Table */}
-      <div className="glass-card table-card">
-        {loading ? (
-          <div className="loader-container">
-            <RefreshCw className="animate-spin text-orange-500" size={32} />
-            <p>Loading devotees list...</p>
-          </div>
-        ) : filteredUsers.length === 0 ? (
-          <div className="empty-state">
-            <p>No devotees match your search parameters.</p>
-          </div>
-        ) : (
-          <div className="table-responsive">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Avatar</th>
-                  <th>Devotee Name</th>
-                  <th>Phone Coordinates</th>
-                  <th>Email ID</th>
-                  <th>Joined Date</th>
-                  <th>Placed Orders</th>
-                  <th>Spiritual Contribution</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map((userItem) => {
-                  const stats = userStats[userItem.id] || { count: 0, spend: 0 };
-                  const avatarUrl = userItem.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userItem.phone}`;
-
-                  return (
-                    <tr key={userItem.id}>
-                      <td>
-                        <img 
-                          src={avatarUrl} 
-                          alt="Devotee Avatar" 
-                          style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#fff7ed' }} 
-                        />
-                      </td>
-                      <td className="font-semibold">{userItem.full_name || 'Anonymous Guest'}</td>
-                      <td className="font-mono text-sm">{userItem.phone}</td>
-                      <td>{userItem.email || <span className="text-gray-400 text-xs">No email</span>}</td>
-                      <td>{new Date(userItem.created_at).toLocaleDateString()}</td>
-                      <td className="font-bold text-center">{stats.count}</td>
-                      <td className="font-bold text-orange-600">₹{stats.spend}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+      {/* Sub-tab navigation */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+        <button 
+          className={`settings-tab-btn ${subTab === 'users' ? 'active' : ''}`}
+          onClick={() => setSubTab('users')}
+          style={{ padding: '0.6rem 1.2rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+        >
+          Devotees List
+        </button>
+        <button 
+          className={`settings-tab-btn ${subTab === 'referrals' ? 'active' : ''}`}
+          onClick={() => setSubTab('referrals')}
+          style={{ padding: '0.6rem 1.2rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+        >
+          Referrals Ledger
+        </button>
       </div>
+
+      {/* Search Input - Only show when filtering devotees list */}
+      {subTab === 'users' && (
+        <div className="glass-card filter-card">
+          <div className="search-bar-container w-full">
+            <Search size={18} className="search-icon" />
+            <input
+              type="text"
+              placeholder="Search devotees by full name, phone number, email..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+
+      {subTab === 'users' ? (
+        /* Devotees Grid Table */
+        <div className="glass-card table-card">
+          {loading ? (
+            <div className="loader-container">
+              <RefreshCw className="animate-spin text-orange-500" size={32} />
+              <p>Loading devotees list...</p>
+            </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="empty-state">
+              <p>No devotees match your search parameters.</p>
+            </div>
+          ) : (
+            <div className="table-responsive">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Avatar</th>
+                    <th>Devotee Name</th>
+                    <th>Phone Coordinates</th>
+                    <th>Email ID</th>
+                    <th>Referral Code</th>
+                    <th>Referred By</th>
+                    <th>Invites</th>
+                    <th>Joined Date</th>
+                    <th>Placed Orders</th>
+                    <th>Coin Balance</th>
+                    <th>Spiritual Contribution</th>
+                    <th style={{ width: '150px', textAlign: 'right' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredUsers.map((userItem) => {
+                    const stats = userStats[userItem.id] || { count: 0, spend: 0 };
+                    const avatarUrl = userItem.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userItem.phone}`;
+                    const wallet = wallets.find(w => w.user_id === userItem.id);
+                    const balance = wallet ? wallet.balance : 50;
+
+                    const userReferralsCount = referrals.filter(r => r.referrer_id === userItem.id).length;
+                    const referrerUser = users.find(u => u.referral_code === userItem.referred_by_code);
+                    const referredByDisplay = referrerUser 
+                      ? `${referrerUser.full_name || 'User'} (${userItem.referred_by_code})`
+                      : userItem.referred_by_code || 'None';
+
+                    return (
+                      <tr key={userItem.id}>
+                        <td>
+                          <img 
+                            src={avatarUrl} 
+                            alt="Devotee Avatar" 
+                            style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#fff7ed' }} 
+                          />
+                        </td>
+                        <td className="font-semibold">{userItem.full_name || 'Anonymous Guest'}</td>
+                        <td className="font-mono text-sm">{userItem.phone}</td>
+                        <td>{userItem.email || <span className="text-gray-400 text-xs">No email</span>}</td>
+                        <td className="font-bold text-orange-600 font-mono">{userItem.referral_code || 'N/A'}</td>
+                        <td className="text-sm text-gray-700">{referredByDisplay}</td>
+                        <td className="font-bold text-center text-blue-600">{userReferralsCount}</td>
+                        <td>{new Date(userItem.created_at).toLocaleDateString()}</td>
+                        <td className="font-bold text-center">{stats.count}</td>
+                        <td className="font-bold text-yellow-600" style={{ fontSize: '0.9rem' }}>🪙 {balance}</td>
+                        <td className="font-bold text-orange-600">₹{stats.spend}</td>
+                        <td>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                            <button
+                              type="button"
+                              className="action-btn-primary"
+                              onClick={() => handleAdjustCoins(userItem.id, balance)}
+                              style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem' }}
+                            >
+                              Adjust Coins
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Referrals Ledger Table */
+        <div className="glass-card table-card">
+          {loading ? (
+            <div className="loader-container">
+              <RefreshCw className="animate-spin text-orange-500" size={32} />
+              <p>Loading referrals ledger...</p>
+            </div>
+          ) : referrals.length === 0 ? (
+            <div className="empty-state">
+              <p>No referral transactions recorded yet.</p>
+            </div>
+          ) : (
+            <div className="table-responsive">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Referrer (Shared Code)</th>
+                    <th>Referrer Phone</th>
+                    <th>Referral Code Used</th>
+                    <th>Referee (Joined User)</th>
+                    <th>Referee Phone</th>
+                    <th>Coins Rewarded</th>
+                    <th>Joined Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {referrals.map((refItem) => {
+                    const referrerProfile = users.find(u => u.id === refItem.referrer_id) || {};
+                    const refereeProfile = users.find(u => u.id === refItem.referee_id) || {};
+
+                    return (
+                      <tr key={refItem.id}>
+                        <td className="font-semibold">
+                          {referrerProfile.full_name || 'Anonymous Referrer'}
+                        </td>
+                        <td className="font-mono text-sm">{referrerProfile.phone || 'N/A'}</td>
+                        <td className="font-mono font-bold text-orange-600">{referrerProfile.referral_code || 'N/A'}</td>
+                        <td className="font-semibold">
+                          {refereeProfile.full_name || 'Anonymous Referee'}
+                        </td>
+                        <td className="font-mono text-sm">{refereeProfile.phone || 'N/A'}</td>
+                        <td className="font-bold text-yellow-600">🪙 {refItem.reward_coins}</td>
+                        <td>
+                          {new Date(refItem.created_at).toLocaleDateString()} at {new Date(refItem.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -1581,6 +1766,8 @@ function App() {
             <Route path="/hero" element={<HeroManagerPage />} />
             <Route path="/banners" element={<BannersManagerPage />} />
             <Route path="/puja-banner" element={<PujaBannersManagerPage />} />
+            <Route path="/god-images" element={<GodImagesManagerPage />} />
+            <Route path="/puja-items" element={<PujaItemsManagerPage />} />
             <Route path="/video-reviews" element={<VideoReviewsManagerPage />} />
             <Route path="/pandit-videos" element={<PanditVideosManagerPage />} />
             <Route path="/users" element={<UsersPage />} />
@@ -1590,6 +1777,9 @@ function App() {
             <Route path="/problem-solutions" element={<ProblemSolutionsManagerPage />} />
             <Route path="/offer-sections" element={<OfferSectionsManagerPage />} />
             <Route path="/daily-rituals" element={<DailyRitualsManagerPage />} />
+            <Route path="/spiritual-calendar" element={<SpiritualCalendarManagerPage />} />
+            <Route path="/push-notifications" element={<PushNotificationsManagerPage />} />
+            <Route path="/astro-api" element={<AstroApiManagerPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>

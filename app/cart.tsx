@@ -187,7 +187,7 @@ const ALL_PRODUCT_METADATA: Record<string, {
 export default function CartScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
-  const { cart, handleAddToCart, handleIncrement, handleDecrement, clearCart, user, refreshSession } = useCart();
+  const { cart, dbMetadata, handleAddToCart, handleIncrement, handleDecrement, clearCart, user, refreshSession } = useCart();
 
   // Pandit Tip Dakshina
   const [panditTip, setPanditTip] = useState<number | null>(51);
@@ -239,29 +239,45 @@ export default function CartScreen() {
   // Derive cart items dynamically from context
   const cartItems: CartItem[] = Object.keys(cart).map((id) => {
     const meta = ALL_PRODUCT_METADATA[id];
-    if (!meta) {
+    if (meta) {
       return {
         id,
-        title: `Divine Offering (${id})`,
-        subtitle: 'Vedic Prasad & Sankalp',
-        originalPrice: 501,
-        offerPrice: 1,
+        title: meta.title,
+        subtitle: meta.subtitle,
+        originalPrice: meta.originalPrice,
+        offerPrice: meta.offerPrice,
         quantity: cart[id],
-        image: require('../assets/God/god.png'),
+        image: meta.image,
         showCounter: true,
-        isDeliverable: false,
+        isDeliverable: meta.isDeliverable,
       };
     }
+
+    const dbMeta = dbMetadata[id];
+    if (dbMeta) {
+      return {
+        id,
+        title: dbMeta.title,
+        subtitle: dbMeta.subtitle,
+        originalPrice: dbMeta.originalPrice,
+        offerPrice: dbMeta.offerPrice,
+        quantity: cart[id],
+        image: dbMeta.image,
+        showCounter: true,
+        isDeliverable: dbMeta.isDeliverable,
+      };
+    }
+
     return {
       id,
-      title: meta.title,
-      subtitle: meta.subtitle,
-      originalPrice: meta.originalPrice,
-      offerPrice: meta.offerPrice,
+      title: t('Divine Offering') + ` (${id.substring(0, 8)})`,
+      subtitle: t('Vedic Prasad & Sankalp'),
+      originalPrice: 501,
+      offerPrice: 1,
       quantity: cart[id],
-      image: meta.image,
+      image: require('../assets/God/god.png'),
       showCounter: true,
-      isDeliverable: meta.isDeliverable,
+      isDeliverable: false,
     };
   });
 

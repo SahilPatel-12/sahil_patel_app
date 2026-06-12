@@ -12,6 +12,7 @@ import { supabase } from '../../services/supabase';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useFocusEffect } from '@react-navigation/native';
+import DraggableCalendarButton from '../../components/DraggableCalendarButton';
 
 
 const { width } = Dimensions.get('window');
@@ -1026,7 +1027,7 @@ export default function PujaScreen() {
 
   return (
     <View style={styles.safeArea}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
@@ -1627,6 +1628,7 @@ export default function PujaScreen() {
           onClose={() => setActivePanditVideo(null)} 
         />
       )}
+      <DraggableCalendarButton />
     </View>
   );
 }

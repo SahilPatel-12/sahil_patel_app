@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,12 +9,16 @@ import {
   StatusBar,
   LayoutAnimation,
   Platform,
-  UIManager
+  UIManager,
+  Image,
+  ActivityIndicator
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useLanguage } from '../context/LanguageContext';
+import { supabase } from '../services/supabase';
+import { safeStorage } from '../services/storage';
 
 const { width } = Dimensions.get('window');
 
@@ -24,80 +28,126 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 interface NotificationItem {
   id: string;
-  category: 'muhurta' | 'booking' | 'shipment' | 'astro';
   title: string;
-  desc: string;
-  time: string;
-  isRead: boolean;
+  body: string;
+  image_url?: string;
+  notification_type: 'vrat' | 'coins' | 'global' | 'generic';
+  target_vrat_id?: string;
+  coin_amount?: number;
+  scheduled_date: string;
+  scheduled_time: string;
+  sent_at?: string;
 }
 
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
-  const [notifications, setNotifications] = useState<NotificationItem[]>([
-    {
-      id: '1',
-      category: 'muhurta',
-      title: 'Brahma Muhurta Hour Active',
-      desc: 'The auspicious spiritual hours have begun. It is the highly recommended time to recite your daily stotrams and mantra paths for supreme divine focus.',
-      time: '4:30 AM Today',
-      isRead: false
-    },
-    {
-      id: '2',
-      category: 'booking',
-      title: 'Sankalp Chanted Successfully',
-      desc: 'Acharya Raman Shastri has completed your personalized name Sahil Patel & Kashyap Gotra Sankalp dedication during the Maha Rudrabhishek ritual in Varanasi. Watch recording.',
-      time: '6:45 PM Yesterday',
-      isRead: false
-    },
-    {
-      id: '3',
-      category: 'shipment',
-      title: 'Prasad Box Dispatched via SpeedPost',
-      desc: 'Your consecrated Lal Peda prasad and energized Copper Shani Ring are out for delivery. Estimated arrival at Scheme No 64, Indore, is within 48 hours.',
-      time: '11:15 AM Yesterday',
-      isRead: true
-    },
-    {
-      id: '4',
-      category: 'astro',
-      title: 'Auspicious Saturn Transit Alignment',
-      desc: 'Saturn (Shani Dev) is transitioning into a highly favorable cosmic alignment. Discover how this affects Aries (Mesh Rashi) and view recommended pacifying homas.',
-      time: 'May 24, 2026',
-      isRead: true
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
+  const [deletedNotificationIds, setDeletedNotificationIds] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch sent notifications from Supabase push_notifications table
+  const fetchNotifications = async () => {
+    setLoading(true);
+    try {
+      // Fetch sent notifications
+      const { data, error } = await supabase
+        .from('push_notifications')
+        .select('*')
+        .eq('status', 'sent')
+        .order('scheduled_date', { ascending: false })
+        .order('scheduled_time', { ascending: false });
+
+      if (error) throw error;
+
+      // Fetch read notification IDs from safeStorage
+      const storedReadIds = await safeStorage.getItem('read_notification_ids');
+      if (storedReadIds) {
+        setReadNotificationIds(JSON.parse(storedReadIds));
+      }
+
+      // Fetch deleted notification IDs from safeStorage
+      const storedDeletedIds = await safeStorage.getItem('deleted_notification_ids');
+      if (storedDeletedIds) {
+        setDeletedNotificationIds(JSON.parse(storedDeletedIds));
+      }
+
+      setNotifications(data || []);
+    } catch (err) {
+      console.error('[Notifications Screen] Error fetching notifications:', err);
+    } finally {
+      setLoading(false);
     }
-  ]);
-
-  const markAllRead = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setNotifications(notifications.map(n => ({ ...n, isRead: true })));
   };
 
-  const clearNotification = (id: string) => {
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  const markAllRead = async () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setNotifications(notifications.filter(n => n.id !== id));
+    const allIds = notifications.map(n => n.id);
+    setReadNotificationIds(allIds);
+    await safeStorage.setItem('read_notification_ids', JSON.stringify(allIds));
   };
 
-  const clearAll = () => {
+  const clearNotification = async (id: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setNotifications([]);
+    const updatedDeleted = [...deletedNotificationIds, id];
+    setDeletedNotificationIds(updatedDeleted);
+    await safeStorage.setItem('deleted_notification_ids', JSON.stringify(updatedDeleted));
   };
 
-  const toggleRead = (id: string) => {
+  const clearAll = async () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setNotifications(notifications.map(n => n.id === id ? { ...n, isRead: !n.isRead } : n));
+    const allIds = notifications.map(n => n.id);
+    setDeletedNotificationIds(allIds);
+    await safeStorage.setItem('deleted_notification_ids', JSON.stringify(allIds));
   };
 
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'muhurta': return <MaterialCommunityIcons name="alarm-bell" size={20} color="#ea580c" />;
-      case 'booking': return <Ionicons name="sparkles" size={18} color="#f59e0b" />;
-      case 'shipment': return <Ionicons name="cube" size={18} color="#059669" />;
-      case 'astro': return <Ionicons name="moon" size={18} color="#6366f1" />;
+  const toggleRead = async (id: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    let updatedRead;
+    if (readNotificationIds.includes(id)) {
+      updatedRead = readNotificationIds.filter(x => x !== id);
+    } else {
+      updatedRead = [...readNotificationIds, id];
+    }
+    setReadNotificationIds(updatedRead);
+    await safeStorage.setItem('read_notification_ids', JSON.stringify(updatedRead));
+  };
+
+  const getCategoryIcon = (type: string) => {
+    switch (type) {
+      case 'vrat': return <MaterialCommunityIcons name="alarm-bell" size={20} color="#ea580c" />;
+      case 'coins': return <Ionicons name="sparkles" size={18} color="#f59e0b" />;
+      case 'global': return <Ionicons name="globe" size={18} color="#059669" />;
+      case 'generic': return <Ionicons name="notifications" size={18} color="#6366f1" />;
       default: return <Ionicons name="notifications" size={18} color="#64748b" />;
     }
   };
+
+  const formatNotificationTime = (dateStr: string, timeStr: string) => {
+    try {
+      const [yyyy, mm, dd] = dateStr.split('-');
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthName = months[parseInt(mm) - 1] || mm;
+      
+      const parts = timeStr.split(':');
+      const hour = parseInt(parts[0]);
+      const min = parts[1] || '00';
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const formattedHour = hour % 12 || 12;
+
+      return `${monthName} ${dd}, ${yyyy} • ${formattedHour}:${min} ${ampm}`;
+    } catch (e) {
+      return `${dateStr} ${timeStr}`;
+    }
+  };
+
+  // Filter out locally deleted notifications
+  const activeNotifications = notifications.filter(n => !deletedNotificationIds.includes(n.id));
 
   return (
     <View style={styles.mainContainer}>
@@ -122,10 +172,10 @@ export default function NotificationsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContainer}
       >
-        {notifications.length > 0 && (
+        {activeNotifications.length > 0 && (
           <View style={styles.metaRow}>
             <Text style={styles.unreadCountText}>
-              {notifications.filter(n => !n.isRead).length} {t('unread alarms')}
+              {activeNotifications.filter(n => !readNotificationIds.includes(n.id)).length} {t('unread notifications')}
             </Text>
             <TouchableOpacity onPress={clearAll} activeOpacity={0.7}>
               <Text style={styles.clearAllText}>{t('Clear All')}</Text>
@@ -133,55 +183,81 @@ export default function NotificationsScreen() {
           </View>
         )}
 
-        {notifications.length > 0 ? (
+        {loading ? (
+          <View style={styles.loaderContainer}>
+            <ActivityIndicator size="large" color="#ea580c" />
+            <Text style={{ marginTop: 12, fontSize: 13, color: '#64748b', fontFamily: 'Outfit-Medium' }}>
+              {t('Retrieving announcements...')}
+            </Text>
+          </View>
+        ) : activeNotifications.length > 0 ? (
           <View style={styles.listContainer}>
-            {notifications.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={[styles.notificationCard, !item.isRead && styles.notificationCardUnread]}
-                activeOpacity={0.9}
-                onPress={() => toggleRead(item.id)}
-              >
-                {/* Left category icon circle */}
-                <View style={[styles.iconCircle, { backgroundColor: item.isRead ? '#f1f5f9' : '#fff7ed' }]}>
-                  {getCategoryIcon(item.category)}
-                </View>
-
-                {/* Body Column */}
-                <View style={styles.cardBody}>
-                  <View style={styles.cardHeaderRow}>
-                    <Text style={[styles.cardTitleText, !item.isRead && styles.cardTitleTextBold]}>
-                      {t(item.title)}
-                    </Text>
-                    {!item.isRead && <View style={styles.unreadDot} />}
-                  </View>
-
-                  <Text style={styles.cardDescText}>{t(item.desc)}</Text>
-                  
-                  <View style={styles.footerRow}>
-                    <Text style={styles.timeText}>{t(item.time)}</Text>
-                    {item.category === 'booking' && (
-                      <TouchableOpacity
-                        style={styles.actionLink}
-                        onPress={() => router.push({ pathname: '/settings_detail', params: { type: 'my_orders' } })}
-                      >
-                        <Text style={styles.actionLinkText}>{t('View Puja')}</Text>
-                        <Ionicons name="arrow-forward" size={11} color="#ea580c" />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-
-                {/* Right delete button */}
+            {activeNotifications.map((item) => {
+              const isRead = readNotificationIds.includes(item.id);
+              return (
                 <TouchableOpacity
-                  style={styles.deleteBtn}
-                  onPress={() => clearNotification(item.id)}
-                  activeOpacity={0.7}
+                  key={item.id}
+                  style={[styles.notificationCard, !isRead && styles.notificationCardUnread]}
+                  activeOpacity={0.9}
+                  onPress={() => toggleRead(item.id)}
                 >
-                  <Ionicons name="close-circle-outline" size={18} color="#cbd5e1" />
+                  {/* Left category icon circle */}
+                  <View style={[styles.iconCircle, { backgroundColor: isRead ? '#f1f5f9' : '#fff7ed' }]}>
+                    {getCategoryIcon(item.notification_type)}
+                  </View>
+
+                  {/* Body Column */}
+                  <View style={styles.cardBody}>
+                    <View style={styles.cardHeaderRow}>
+                      <Text style={[styles.cardTitleText, !isRead && styles.cardTitleTextBold]}>
+                        {t(item.title)}
+                      </Text>
+                      {!isRead && <View style={styles.unreadDot} />}
+                    </View>
+
+                    <Text style={styles.cardDescText}>{t(item.body)}</Text>
+
+                    {item.image_url && (
+                      <Image
+                        source={{ uri: item.image_url }}
+                        style={styles.notificationImage}
+                        resizeMode="cover"
+                      />
+                    )}
+                    
+                    <View style={styles.footerRow}>
+                      <Text style={styles.timeText}>
+                        {formatNotificationTime(item.scheduled_date, item.scheduled_time)}
+                      </Text>
+                      {item.notification_type === 'coins' && item.coin_amount && (
+                        <View style={styles.badge}>
+                          <MaterialCommunityIcons name="coins" size={10} color="#eab308" />
+                          <Text style={styles.badgeText}>+{item.coin_amount} Coins</Text>
+                        </View>
+                      )}
+                      {item.notification_type === 'vrat' && item.target_vrat_id && (
+                        <TouchableOpacity
+                          style={styles.actionLink}
+                          onPress={() => router.push({ pathname: '/spiritual_calendar', params: { viewDate: item.target_vrat_id } })}
+                        >
+                          <Text style={styles.actionLinkText}>{t('View Vrat')}</Text>
+                          <Ionicons name="arrow-forward" size={11} color="#ea580c" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Right delete button */}
+                  <TouchableOpacity
+                    style={styles.deleteBtn}
+                    onPress={() => clearNotification(item.id)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close-circle-outline" size={18} color="#cbd5e1" />
+                  </TouchableOpacity>
                 </TouchableOpacity>
-              </TouchableOpacity>
-            ))}
+              );
+            })}
           </View>
         ) : (
           <View style={styles.emptyContainer}>
@@ -272,6 +348,12 @@ const styles = StyleSheet.create({
   listContainer: {
     gap: 12,
   },
+  loaderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 80,
+  },
   notificationCard: {
     flexDirection: 'row',
     backgroundColor: '#ffffff',
@@ -335,10 +417,18 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginBottom: 8,
   },
+  notificationImage: {
+    width: '100%',
+    height: 140,
+    borderRadius: 12,
+    marginTop: 4,
+    marginBottom: 10,
+  },
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 4,
   },
   timeText: {
     fontSize: 10.5,
@@ -405,4 +495,18 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontFamily: 'Outfit-Bold',
   },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#fef9c3',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+  },
+  badgeText: {
+    fontSize: 9.5,
+    fontFamily: 'Outfit-Bold',
+    color: '#a16207',
+  }
 });

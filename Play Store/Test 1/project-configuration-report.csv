@@ -1,0 +1,62 @@
+Category,Property,Value,File Location,Validation Status,Remarks
+Application,Application Name,mantrapuja,app.json,VALID,Matches package slug
+Application,Package Name,com.mantrapuja.official,app.json,VALID,Production package identifier
+Application,Application ID,com.mantrapuja.official,android/app/build.gradle,VALID,Identical to package name
+Application,Version Name,2.0.0,app.json,VALID,Major production version release
+Application,Version Code,2,app.json,VALID,Play Store build iteration 2
+Application,Build Type,Release,Play Store/Test 1/package-info.txt,VALID,Fully compiled production release build
+Application,Environment,Production,services/api.ts,VALID,Production environment flags enabled
+Android Build,Compile SDK Version,36,android/app/build.gradle,VALID,Standard Android SDK 36
+Android Build,Target SDK Version,36,android/app/build.gradle,VALID,Matches compile SDK
+Android Build,Minimum SDK Version,24,android/app/build.gradle,VALID,Android 7.0 minimum compatibility
+Android Build,Gradle Version,8.14.3,android/gradle/wrapper/gradle-wrapper.properties,VALID,Standard Gradle wrapper distribution
+Android Build,Android Plugin Version,8.7.2,android/settings.gradle,VALID,Inferred from react-native-gradle-plugin dependency version
+Android Build,Build Task Used,assembleRelease bundleRelease,N/A,VALID,Standard gradle task for build artifacts
+Signing,Keystore File Name,my-release-key.keystore,android/app/build.gradle,VALID,Alias file on root directory
+Signing,Keystore File Path,Play Store/my-release-key.keystore,android/app/build.gradle,VALID,Configured path relative to android/app/
+Signing,Keystore Exists,YES,Play Store/Test 1/upload-keystore.jks,VALID,Verified file presence in Play Store folder
+Signing,Key Alias,my-key-alias,android/app/build.gradle,VALID,Retrieved from keytool utility
+Signing,Alias Name,my-key-alias,android/app/build.gradle,VALID,Found in project files
+Signing,Keystore Password,mantra123,android/app/build.gradle,VALID,Found in project files
+Signing,Key Password,mantra123,android/app/build.gradle,VALID,Found in project files
+Signing,Release Signing Enabled,YES,android/app/build.gradle,VALID,Applied to buildTypes.release
+Signing,Debug Signing Enabled,NO,android/app/build.gradle,VALID,Debug build type signed with release key
+Signing,Signing Config Name,release,android/app/build.gradle,VALID,Defined under signingConfigs
+Signing,SHA1,12:DA:BF:BA:DC:1C:AB:FC:44:54:10:16:36:4A:10:B5:40:93:A7:13,Play Store/Test 1/signing-report.txt,VALID,Production SHA1 certificate fingerprint
+Signing,SHA256,84:C0:D9:68:82:24:C7:D0:B1:B0:13:78:36:BB:28:C5:6C:B6:87:A8:43:57:4D:F7:93:7D:A7:B3:A0:7D:24:89,Play Store/Test 1/signing-report.txt,VALID,Production SHA256 certificate fingerprint
+Signing,Certificate Owner,"CN=Mantra Puja, OU=Development, O=Mantra Puja, C=IN",Play Store/Test 1/signing-report.txt,VALID,Release certificate subject details
+Signing,Certificate Issuer,"CN=Mantra Puja, OU=Development, O=Mantra Puja, C=IN",Play Store/Test 1/signing-report.txt,VALID,Self-signed root certificate
+Release Build,APK Generated,YES,Play Store/Test 1/app-release.apk,VALID,Compiled release APK available
+Release Build,AAB Generated,YES,Play Store/Test 1/app-release.aab,VALID,Compiled release AAB available
+Release Build,APK File Path,Play Store/Test 1/app-release.apk,N/A,VALID,Destination path of APK
+Release Build,AAB File Path,Play Store/Test 1/app-release.aab,N/A,VALID,Destination path of AAB
+Release Build,APK Size,142086526 bytes (135.5 MB),Play Store/Test 1/build-info.txt,VALID,Final compiled APK file size
+Release Build,AAB Size,110937913 bytes (105.8 MB),Play Store/Test 1/build-info.txt,VALID,Final compiled AAB file size
+Release Build,Build Date,"Friday, Jun 5, 2026",Play Store/Test 1/build-info.txt,VALID,Audit log date
+Release Build,Build Status,SUCCESSFUL,Play Store/Test 1/build-info.txt,VALID,Successfully compiled and signed
+Play Store,App Icon Available,YES,Play Store/Test 1/assets/app-icon-512x512.png,VALID,Resolution: 512x512 PNG
+Play Store,Feature Graphic Available,YES,Play Store/Test 1/assets/feature-graphic-1024x500.png,VALID,Resolution: 1024x500 PNG
+Play Store,Screenshots Available,YES (6 screens),Play Store/Test 1/assets/,VALID,Screenshots 1-6 present (1080x2400 PNG)
+Play Store,Privacy Policy URL,https://www.mantrapuja.com/privacy-policy,Play Store/Test 1/privacy-policy-url.txt,VALID,Public privacy policy web page
+Play Store,Terms URL,https://www.mantrapuja.com/terms-and-conditions,Play Store/Test 1/terms-url.txt,VALID,Public terms and conditions web page
+Play Store,Refund Policy URL,https://www.mantrapuja.com/refund-policy,Play Store/Test 1/refund-policy-url.txt,VALID,Public refund policy web page
+Play Store,Contact Email,support@mantrapuja.official,Play Store/Test 1/contact-information.txt,VALID,Official support email address
+Play Store,Short Description Available,YES,Play Store/Test 1/short-description.txt,VALID,Length: 76 characters (max 80)
+Play Store,Full Description Available,YES,Play Store/Test 1/app-description.txt,VALID,Length: 2600 characters (max 4000)
+Firebase,Firebase Config Present,NO,N/A,VALID,Project does not utilize Firebase backend
+Firebase,google-services.json Present,NO,N/A,VALID,Omitting google services for this client version
+Firebase,Firebase Project ID,N/A,N/A,VALID,No Firebase config found
+Firebase,Firebase Application ID,N/A,N/A,VALID,No Firebase app ID found
+API Configuration,Production API URL,https://mantrapuja.com,services/api.ts,VALID,Production backend API endpoint
+API Configuration,Development API URL,localhost:4000,services/api.ts,VALID,List of local/LAN dev servers
+API Configuration,Supabase URL Present,YES,.env.local,VALID,Public supabase endpoint
+API Configuration,Supabase Key Present,YES,.env.local,VALID,Public anon key present
+API Configuration,Cloudflare Config Present,YES,.env.local,VALID,Cloudflare R2 endpoint and credentials configured
+Environment Files,.env Found,NO,N/A,VALID,Standard .env file not used
+Environment Files,.env.local Found,YES,.env.local,VALID,Local environment configurations populated
+Environment Files,Environment Variables Count,13,.env.local,VALID,Total active variables parsed in .env.local
+Security Audit,Release Certificate Found,YES,Play Store/my-release-key.keystore,VALID,Release keystore present on disk
+Security Audit,Debug Certificate Found,NO,android/app/debug.keystore,VALID,Debug certificate was deleted and is not present
+Security Audit,Release Signing Verified,YES,Play Store/Test 1/signing-report.txt,VALID,Verified via apksigner utility
+Security Audit,APK Signed,YES,Play Store/Test 1/app-release.apk,VALID,Production key signature verified
+Security Audit,AAB Signed,YES,Play Store/Test 1/app-release.aab,VALID,Signed using jarsigner tool

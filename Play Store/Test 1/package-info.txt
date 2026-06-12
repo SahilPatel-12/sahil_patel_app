@@ -1,0 +1,4 @@
+Package Name: com.mantrapuja.official
+Version Name: 2.0.0
+Version Code: 2
+Build Type: Release

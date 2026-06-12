@@ -8,6 +8,7 @@ import { router } from 'expo-router';
 import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
 import { safeStorage } from '../services/storage';
+import { supabase } from '../services/supabase';
 
 export default function Header() {
   const { openDrawer } = useDrawer();
@@ -17,6 +18,7 @@ export default function Header() {
   const [userName, setUserName] = useState('Guest');
   const [avatarSeed, setAvatarSeed] = useState('Guest');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [coinBalance, setCoinBalance] = useState<number | null>(null);
 
   useEffect(() => {
     let lastSessionStr = '';
@@ -32,11 +34,36 @@ export default function Header() {
               setAvatarSeed(parsed.name);
             }
             setAvatarUrl(parsed.avatar_url || null);
+
+            // Fetch wallet balance
+            const { data } = await supabase
+              .from('user_wallets')
+              .select('balance')
+              .eq('user_id', parsed.id)
+              .maybeSingle();
+
+            if (data) {
+              setCoinBalance(data.balance);
+            } else {
+              setCoinBalance(50);
+            }
           }
         } else if (!sessionStr) {
           setUserName('Guest');
           setAvatarSeed('Guest');
           setAvatarUrl(null);
+          setCoinBalance(null);
+        } else if (sessionStr && lastSessionStr) {
+          // Keep balance updated in real-time
+          const parsed = JSON.parse(sessionStr);
+          const { data } = await supabase
+            .from('user_wallets')
+            .select('balance')
+            .eq('user_id', parsed.id)
+            .maybeSingle();
+          if (data) {
+            setCoinBalance(data.balance);
+          }
         }
       } catch (err) {
         console.error('Error checking user session in Header:', err);
@@ -97,13 +124,15 @@ export default function Header() {
               )}
             </View>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.iconBtn}
-            activeOpacity={0.7}
-            onPress={() => router.push({ pathname: '/settings_detail', params: { type: 'my_wallet' } })}
-          >
-            <Ionicons name="wallet-outline" size={22} color="#f97316" />
-          </TouchableOpacity>
+          {coinBalance !== null && (
+            <TouchableOpacity
+              style={styles.coinBalanceContainer}
+              activeOpacity={0.7}
+              onPress={() => router.push('/wallet')}
+            >
+              <Text style={styles.coinBalanceText}>🪙 {coinBalance}</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={styles.iconBtn}
             activeOpacity={0.75}
@@ -244,5 +273,21 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 8,
     fontFamily: 'Outfit-Bold',
+  },
+  coinBalanceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 3,
+  },
+  coinBalanceText: {
+    fontSize: 12,
+    fontFamily: 'Outfit-Bold',
+    color: '#ea580c',
   },
 });

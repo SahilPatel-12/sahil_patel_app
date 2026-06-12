@@ -106,17 +106,54 @@ button {
 
 .input-field {
   width: 100%;
-  background: var(--glass);
-  border: 1px solid var(--border);
+  background-color: #12121a !important;
+  border: 1px solid var(--border) !important;
   border-radius: var(--radius);
   padding: 0.75rem 1rem;
-  color: var(--text-main);
+  color: var(--text-main) !important;
   outline: none;
-  transition: border-color 0.3s ease;
+  transition: all 0.3s ease;
+  color-scheme: dark;
 }
 
 .input-field:focus {
-  border-color: var(--primary);
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15) !important;
+  background-color: #161622 !important;
+}
+
+/* Specific styling for select dropdowns to ensure premium arrow and dark options list */
+select.input-field {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='rgba(148, 163, 184, 0.8)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 1rem center !important;
+  background-size: 1rem !important;
+  padding-right: 2.5rem !important;
+  cursor: pointer;
+}
+
+/* Style select options to ensure they render dark regardless of OS theme */
+select.input-field option {
+  background-color: #161622 !important;
+  color: var(--text-main) !important;
+}
+
+/* Force native date/time/calendar icons to invert and look clean on dark theme */
+input[type="date"].input-field::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(0.6);
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+input[type="date"].input-field::-webkit-calendar-picker-indicator:hover {
+  filter: invert(1) opacity(0.9);
+}
+
+/* Ensure placeholder text matches the premium muted dark look */
+.input-field::placeholder {
+  color: rgba(255, 255, 255, 0.35) !important;
 }
 
 /* Split Screen Layout for One Rupee Manager */
@@ -218,3 +255,70 @@ button {
   border-bottom-color: var(--primary);
   font-weight: 600;
 }
+
+/* Layout Utilities for Form Columns */
+.form-layout-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 1024px) {
+  .form-layout-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.form-column {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Two-column sub-grid inside forms */
+.input-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .input-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Three-column sub-grid inside forms */
+.input-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .input-grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Quick Select Presets Badge Styling */
+.badge-preset {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge-preset:hover {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: var(--primary);
+  color: var(--text-main);
+}
+

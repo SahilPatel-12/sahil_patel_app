@@ -2,7 +2,7 @@
   "expo": {
     "name": "mantrapuja",
     "slug": "mantrapuja",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/app_logos/icon.png",
     "scheme": "mantrapuja",
@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.mantrapuja.app"
+      "bundleIdentifier": "com.mantrapuja.official"
     },
     "android": {
       "adaptiveIcon": {
@@ -20,7 +20,9 @@
       "backgroundColor": "#E6F4FE",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.mantrapuja.app"
+      "package": "com.mantrapuja.official",
+      "googleServicesFile": "./android/app/google-services.json",
+      "versionCode": 2
     },
     "web": {
       "output": "static",
@@ -41,6 +43,13 @@
         "expo-image-picker",
         {
           "photosPermission": "The app accesses your photos to let you set a profile picture."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/app_logos/icon.png",
+          "color": "#FF9500"
         }
       ]
     ],

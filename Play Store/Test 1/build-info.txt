@@ -1,28 +1,26 @@
-MantraPuja — Android Release Build Information
-==============================================
+Build Information:
 
-Build Date: Wed Jun 03 23:59:16 IST 2026
-Package Name: com.mantrapuja.app
-Version Name: 1.0.0
-Version Code: 1
+Build Date: Friday, Jun 5, 2026
+Build Time: 16:30 IST
 
-Signing Keystore Information
-----------------------------
-Keystore File Name: upload-keystore.jks
-Keystore Store/Key Password: mantrapuja
-Keystore Key Alias: upload-key
-Keystore Key Password: mantrapuja
+Build Environment:
+- Java Version: OpenJDK 17.0.18 (Zulu17.64+15-CA)
+- Node.js Version: 22.22.3
+- npm Version: 10.9.8
+- Android SDK Path: /Users/sahilpatel/Library/Android/sdk
+- Build Tool: Gradle 8.14.3
 
-Keystore Fingerprints (Signatures)
-----------------------------------
-SHA-1: 5D:0C:5F:18:FA:44:AF:74:03:11:09:32:25:6C:85:D4:27:FE:B2:E1
-SHA-256: 57:7F:39:5C:D1:D4:A4:BC:EC:6C:75:B4:0C:4F:07:1F:52:CE:67:C2:29:58:FF:8B:FF:56:55:6E:8F:33:BE:84
-Signature Algorithm: SHA256withRSA
-Key Size: 2048-bit RSA
+Build Outputs:
+- APK File Name: app-release.apk
+- APK File Size: 142,086,526 bytes (135.5 MB)
+- APK Path: Play Store/Test 1/app-release.apk
 
-Optimizations & Protections
----------------------------
-Proguard/R8 Minification: Enabled
-Resource Shrinking: Enabled
-Hermes JS Engine bytecode bundling: Enabled
-AAPT2 PNG Crunching: Enabled
+- AAB File Name: app-release.aab
+- AAB File Size: 110,937,913 bytes (105.8 MB)
+- AAB Path: Play Store/Test 1/app-release.aab
+
+- Keystore File Name: upload-keystore.jks (copied from my-release-key.keystore)
+- Keystore File Size: 2,708 bytes
+- Keystore Path: Play Store/Test 1/upload-keystore.jks
+
+Status: SUCCESSFUL

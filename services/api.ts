@@ -19,10 +19,6 @@ export const getBackendHosts = () => {
   if (ip) {
     list.unshift(`${ip}:4000`);
   }
-  // Fallback IPs
-  if (!list.includes("10.47.158.92:4000")) list.push("10.47.158.92:4000");
-  if (!list.includes("10.169.33.92:4000")) list.push("10.169.33.92:4000");
-  if (!list.includes("10.141.35.92:4000")) list.push("10.141.35.92:4000");
   return list;
 };
 

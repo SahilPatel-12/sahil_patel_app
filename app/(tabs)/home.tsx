@@ -27,6 +27,8 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { useFocusEffect } from '@react-navigation/native';
 
 
+import DraggableCalendarButton from '../../components/DraggableCalendarButton';
+
 const { width, height } = Dimensions.get('window');
 
 const QUICK_ACTIONS = [
@@ -486,7 +488,7 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.mainContainer}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
 
       <ScrollView
         bounces={false}
@@ -993,6 +995,7 @@ export default function HomeScreen() {
           onClose={() => setActiveReview(null)} 
         />
       )}
+      <DraggableCalendarButton />
     </View>
   );
 }

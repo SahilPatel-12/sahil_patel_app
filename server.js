@@ -26,6 +26,9 @@ const rashifalRouter = require('./rashifalApi');
 const panchangRouter = require('./panchangApi');
 const kundliRouter = require('./kundliApi');
 
+// Import Notification Background Dispatcher
+const { startNotificationDispatcher } = require('./services/notificationDispatcher');
+
 // Mount Routers
 app.use('/api', rashifalRouter);
 app.use('/api', panchangRouter);
@@ -74,6 +77,9 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`   - Rashi API:      POST/GET http://localhost:${PORT}/api/astrology/horoscope`);
     console.log(`   - Panchang API:   POST/GET http://localhost:${PORT}/api/astrology/panchang`);
     console.log(`   - Kundli API:     POST      http://localhost:${PORT}/api/astrology/kundli`);
+    
+    // Start Push Notification Dispatcher Loop
+    startNotificationDispatcher();
 });
 
 module.exports = app;

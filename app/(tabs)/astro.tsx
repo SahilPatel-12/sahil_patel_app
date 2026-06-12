@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useLocalSearchParams } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import {
   Text,
   View,
@@ -22,6 +23,7 @@ import Constants from "expo-constants";
 import { safeStorage } from "../../services/storage";
 import { supabase } from "../../services/supabase";
 import { requestAstro } from "../../services/api";
+import DraggableCalendarButton from "../../components/DraggableCalendarButton";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -2068,6 +2070,7 @@ export default function AstroScreen() {
   // ── Main render ───────────────────────────────────────────────────────────
   return (
     <View style={s.root}>
+      <StatusBar style="dark" />
       {TopNavTabs()}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
         {topTab==="rashi"      && RashiSection()}
@@ -2075,6 +2078,7 @@ export default function AstroScreen() {
         {topTab==="panchang"   && PanchangSection()}
         <View style={{height:110}}/>
       </ScrollView>
+      <DraggableCalendarButton />
     </View>
   );
 }

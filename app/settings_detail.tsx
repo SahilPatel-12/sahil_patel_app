@@ -214,33 +214,38 @@ export default function SettingsDetailScreen() {
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [templeCatalog, setTempleCatalog] = useState<Record<string, string>>({});
+  const [itemNamesMap, setItemNamesMap] = useState<Record<string, string>>({});
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
 
   const fetchTempleCatalog = async () => {
     try {
       const mapping: Record<string, string> = {};
 
-      // Fetch from general_poojas
-      const { data: generalData } = await supabase
-        .from('general_poojas')
-        .select('id, temple');
-      if (generalData) {
-        generalData.forEach(item => {
-          if (item.temple) {
-            mapping[item.id] = item.temple;
-          }
+      const [general, website, oneRupee, problem] = await Promise.all([
+        supabase.from('general_poojas').select('id, temple'),
+        supabase.from('website_pooja_products').select('id, temple_association'),
+        supabase.from('one_rupee_poojas').select('id, provider'),
+        supabase.from('problem_poojas').select('id, temple')
+      ]);
+
+      if (general.data) {
+        general.data.forEach(item => {
+          if (item.temple) mapping[item.id] = item.temple;
         });
       }
-
-      // Fetch from website_pooja_products
-      const { data: webData } = await supabase
-        .from('website_pooja_products')
-        .select('id, temple_association');
-      if (webData) {
-        webData.forEach(item => {
-          if (item.temple_association) {
-            mapping[item.id] = item.temple_association;
-          }
+      if (website.data) {
+        website.data.forEach(item => {
+          if (item.temple_association) mapping[item.id] = item.temple_association;
+        });
+      }
+      if (oneRupee.data) {
+        oneRupee.data.forEach(item => {
+          if (item.provider) mapping[item.id] = item.provider;
+        });
+      }
+      if (problem.data) {
+        problem.data.forEach(item => {
+          if (item.temple) mapping[item.id] = item.temple;
         });
       }
 
@@ -248,6 +253,55 @@ export default function SettingsDetailScreen() {
     } catch (err) {
       console.error('Error fetching temple catalog:', err);
     }
+  };
+
+  const fetchItemNames = async (ordersList: any[]) => {
+    const ids = new Set<string>();
+    ordersList.forEach(order => {
+      if (order.order_items) {
+        order.order_items.forEach((item: any) => {
+          const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(item.item_id);
+          if (isUuid) {
+            ids.add(item.item_id);
+          }
+        });
+      }
+    });
+
+    const uniqueIds = Array.from(ids);
+    if (uniqueIds.length === 0) return;
+
+    const nameMap: Record<string, string> = {};
+    await Promise.all(uniqueIds.map(async (id) => {
+      try {
+        const [oneRupee, general, website, problem, offer, daily] = await Promise.all([
+          supabase.from('one_rupee_poojas').select('title').eq('id', id).maybeSingle(),
+          supabase.from('general_poojas').select('title').eq('id', id).maybeSingle(),
+          supabase.from('website_pooja_products').select('name').eq('id', id).maybeSingle(),
+          supabase.from('problem_poojas').select('title').eq('id', id).maybeSingle(),
+          supabase.from('offer_pujas').select('title').eq('id', id).maybeSingle(),
+          supabase.from('daily_pujas').select('title').eq('id', id).maybeSingle()
+        ]);
+
+        if (oneRupee.data) {
+          nameMap[id] = oneRupee.data.title;
+        } else if (general.data) {
+          nameMap[id] = general.data.title;
+        } else if (website.data) {
+          nameMap[id] = website.data.name;
+        } else if (problem.data) {
+          nameMap[id] = problem.data.title;
+        } else if (offer.data) {
+          nameMap[id] = offer.data.title;
+        } else if (daily.data) {
+          nameMap[id] = daily.data.title;
+        }
+      } catch (err) {
+        console.error('Error fetching dynamic title:', err);
+      }
+    }));
+
+    setItemNamesMap(prev => ({ ...prev, ...nameMap }));
   };
 
   const getBookingTempleName = (orderItems: any[]) => {
@@ -300,6 +354,9 @@ export default function SettingsDetailScreen() {
 
       if (error) throw error;
       setOrders(data || []);
+      if (data && data.length > 0) {
+        await fetchItemNames(data);
+      }
     } catch (err) {
       console.error('Error fetching orders:', err);
     }
@@ -665,7 +722,7 @@ export default function SettingsDetailScreen() {
 
   // 3. My Orders / Bookings Component
   const getOrderItemsTitle = (orderItems: any[]) => {
-    if (!orderItems || orderItems.length === 0) return 'Divine Offering';
+    if (!orderItems || orderItems.length === 0) return t('Divine Offering');
     const metadata: Record<string, string> = {
       '1': 'Ganesh Puja Special',
       '2': 'Laxmi Puja Special',
@@ -685,7 +742,10 @@ export default function SettingsDetailScreen() {
       'rec_3': 'Sacred Rudraksha Mala',
       'add_1': 'Aromatic Kapur Tablets'
     };
-    return orderItems.map((item: any) => t(metadata[item.item_id] || item.item_id)).join(' + ');
+    return orderItems.map((item: any) => {
+      const name = metadata[item.item_id] || itemNamesMap[item.item_id] || item.item_id;
+      return t(name);
+    }).join(' + ');
   };
 
   const getPujaStepIndex = (status: string) => {
@@ -1083,7 +1143,7 @@ export default function SettingsDetailScreen() {
 
   // 4. Wallet Preferences Component
   const renderWalletView = () => (
-    <View style={styles.contentCard}>
+    <View style={[styles.contentCard, { overflow: 'hidden' }]}>
       {/* Wallet Balance Gold Gilt Card */}
       <LinearGradient
         colors={['#f59e0b', '#d97706', '#92400e']}
@@ -1127,6 +1187,7 @@ export default function SettingsDetailScreen() {
             style={styles.rechargeCellBtn}
             onPress={() => simulateRecharge(pack.amt)}
             activeOpacity={0.8}
+            disabled={true}
           >
             <Text style={styles.rechargeCellAmtText}>+{pack.amt}</Text>
             <Text style={styles.rechargeCellNameText}>{t(pack.name)}</Text>
@@ -1148,6 +1209,7 @@ export default function SettingsDetailScreen() {
             style={styles.scratchShieldCover}
             activeOpacity={0.9}
             onPress={triggerScratch}
+            disabled={true}
           >
             <LinearGradient
               colors={['#ea580c', '#f97316', '#ffedd5']}
@@ -1164,6 +1226,17 @@ export default function SettingsDetailScreen() {
             <Text style={styles.revealCoinsAddedText}>{t('Coins added successfully to your wallet')}</Text>
           </View>
         )}
+      </View>
+
+      {/* Coming Soon Overlay */}
+      <View style={styles.comingSoonOverlay}>
+        <View style={styles.comingSoonBadge}>
+          <MaterialCommunityIcons name="clock-fast" size={38} color="#ea580c" />
+          <Text style={styles.comingSoonTitle}>{t('Coming Soon')}</Text>
+          <Text style={styles.comingSoonDesc}>
+            {t('We are currently setting up secure payment gateways. The Devotional Wallet feature will be activated shortly!')}
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -2605,5 +2678,43 @@ const styles = StyleSheet.create({
     color: '#ea580c',
     fontSize: 12.5,
     fontFamily: 'Outfit-Bold',
+  },
+  comingSoonOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    zIndex: 10,
+  },
+  comingSoonBadge: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
+    width: '100%',
+  },
+  comingSoonTitle: {
+    fontSize: 20,
+    fontFamily: 'Outfit-Bold',
+    color: '#0f172a',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  comingSoonDesc: {
+    fontSize: 13,
+    fontFamily: 'Outfit-Regular',
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });
