@@ -1,0 +1,9 @@
+Mantra Puja Release Notes (Version 4.0.0, Version Code 4):
+
+- Added dynamic delivery charge calculations of ₹100 for shop orders under ₹150, with free delivery for orders above ₹150.
+- Mentioned delivery charges clearly on checkout invoice summary card.
+- Updated free delivery thresholds across all admin pages and customer-facing panels to ₹150.
+- Performance improvements and critical bug fixes for production release.
+- Enhanced stability for online Puja booking and live sessions.
+- Faster loading and precise planetary calculations in Kundli and Vedic Panchang.
+- Updated to Version 4.0.0 with fully verified signing configurations for the Play Store.

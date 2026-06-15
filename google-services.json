@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "991161710338",
+    "project_id": "mantrapujaapp",
+    "storage_bucket": "mantrapujaapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:991161710338:android:4166de9609ba4c6a37341b",
+        "android_client_info": {
+          "package_name": "com.mantrapuja.official"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD0XTFrIwZTqixffCUbGR7r8CW--13nMj4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

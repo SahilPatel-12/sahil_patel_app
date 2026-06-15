@@ -231,7 +231,7 @@ export default function NotificationsScreen() {
                       </Text>
                       {item.notification_type === 'coins' && item.coin_amount && (
                         <View style={styles.badge}>
-                          <MaterialCommunityIcons name="coins" size={10} color="#eab308" />
+                          <Ionicons name="sparkles" size={10} color="#eab308" />
                           <Text style={styles.badgeText}>+{item.coin_amount} Coins</Text>
                         </View>
                       )}

@@ -30,7 +30,8 @@ import {
   Layers,
   Calendar,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  Receipt
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { uploadToR2 } from './lib/r2'
@@ -50,6 +51,7 @@ import PujaItemsManagerPage from './PujaItemsManagerPage'
 import SpiritualCalendarManagerPage from './SpiritualCalendarManagerPage'
 import PushNotificationsManagerPage from './PushNotificationsManagerPage'
 import AstroApiManagerPage from './AstroApiManagerPage'
+import InvoiceManagerPage from './InvoiceManagerPage'
 import './App.css'
 
 // --- Components ---
@@ -78,6 +80,7 @@ const Sidebar = ({ onLogout }) => {
     { name: 'Push Notifications', path: '/push-notifications', icon: <Bell size={20} /> },
     { name: 'Astro APIs', path: '/astro-api', icon: <Server size={20} /> },
     { name: 'Analytics', path: '/analytics', icon: <BarChart3 size={20} /> },
+    { name: 'Invoices', path: '/invoices', icon: <Receipt size={20} /> },
     { name: 'Settings', path: '/settings', icon: <Settings size={20} /> },
   ];
 
@@ -823,6 +826,8 @@ const SettingsPage = () => {
     }
   };
 
+
+
   return (
     <div className="page-content">
       <div className="page-header">
@@ -831,7 +836,6 @@ const SettingsPage = () => {
       </div>
 
       <div className="settings-layout">
-        {/* Settings Navigation Tabs */}
         <div className="settings-nav glass-card">
           <button 
             className={`settings-tab-btn ${activeTab === 'general' ? 'active' : ''}`}
@@ -1017,6 +1021,8 @@ const SettingsPage = () => {
               )}
             </div>
           )}
+
+
         </div>
       </div>
     </div>
@@ -1781,6 +1787,7 @@ function App() {
             <Route path="/push-notifications" element={<PushNotificationsManagerPage />} />
             <Route path="/astro-api" element={<AstroApiManagerPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/invoices" element={<InvoiceManagerPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>

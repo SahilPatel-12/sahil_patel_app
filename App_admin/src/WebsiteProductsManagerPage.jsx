@@ -576,6 +576,12 @@ export default function WebsiteProductsManagerPage() {
     rituals_included: [], // array of { name, duration, description }
     samagri_list: [], // array of { name, quantity, description }
     priest_details: { name: '', qualification: '', experience: '', bio: '' },
+    invoice_settings: {
+      override_global: false,
+      gst_percent: 0,
+      discount_percent: 0,
+      delivery_charge: 100
+    },
     duration: '',
     ideal_occasions_input: '',
     temple_association: '',
@@ -1039,6 +1045,7 @@ export default function WebsiteProductsManagerPage() {
       rituals_included: p.rituals_included || [],
       samagri_list: p.samagri_list || [],
       priest_details: p.priest_details || { name: '', qualification: '', experience: '', bio: '' },
+      invoice_settings: p.invoice_settings || { override_global: false, gst_percent: 0, discount_percent: 0, delivery_charge: 100 },
       duration: p.duration || '',
       ideal_occasions_input: p.ideal_occasions ? p.ideal_occasions.join(', ') : '',
       temple_association: p.temple_association || '',
@@ -2004,6 +2011,8 @@ export default function WebsiteProductsManagerPage() {
                     </div>
                   )}
 
+
+
                   <div className="form-actions" style={{ marginTop: '2rem' }}>
                     <button 
                       type="button" 
@@ -2423,7 +2432,7 @@ export default function WebsiteProductsManagerPage() {
                 {/* Simulated Floating Footer */}
                 <div style={{ marginTop: 'auto', padding: '10px', width: '100%', flexShrink: 0, borderTop: '0.5px solid #f1f5f9', backgroundColor: '#f0fdfa' }}>
                   <span style={{ fontSize: '8px', color: '#0f766e', fontWeight: '500' }}>
-                    <span style={{ fontWeight: 'bold' }}>FREE DELIVERY</span> on orders above <span style={{ fontWeight: 'bold' }}>₹149</span>
+                    <span style={{ fontWeight: 'bold' }}>FREE DELIVERY</span> on orders above <span style={{ fontWeight: 'bold' }}>₹150</span>
                   </span>
                 </div>
 

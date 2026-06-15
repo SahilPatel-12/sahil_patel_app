@@ -37,11 +37,12 @@ const fetchDbItemMetadata = async (id: string) => {
   if (!isUuid) return null;
 
   try {
-    const [oneRupee, general, website, problem, offer, daily] = await Promise.all([
-      supabase.from('one_rupee_poojas').select('id, title, original_price, offer_price, provider, image_url').eq('id', id).maybeSingle(),
-      supabase.from('general_poojas').select('id, title, original_price, offer_price, provider, image_url').eq('id', id).maybeSingle(),
-      supabase.from('website_pooja_products').select('id, name, original_price, price, subtitle, temple_association, image').eq('id', id).maybeSingle(),
-      supabase.from('problem_poojas').select('id, title, original_price, offer_price, provider, image_url').eq('id', id).maybeSingle(),
+    const [oneRupee, general, website, problem, combo, offer, daily] = await Promise.all([
+      supabase.from('one_rupee_poojas').select('id, title, original_price, offer_price, provider, image_url, invoice_settings').eq('id', id).maybeSingle(),
+      supabase.from('general_poojas').select('id, title, original_price, offer_price, provider, image_url, invoice_settings').eq('id', id).maybeSingle(),
+      supabase.from('website_pooja_products').select('id, name, original_price, price, subtitle, temple_association, image, invoice_settings').eq('id', id).maybeSingle(),
+      supabase.from('problem_poojas').select('id, title, original_price, offer_price, provider, image_url, invoice_settings').eq('id', id).maybeSingle(),
+      supabase.from('combo_poojas').select('id, title, original_price, price, tagline, left_image_url, invoice_settings').eq('id', id).maybeSingle(),
       supabase.from('offer_pujas').select('id, title, price, discounted_price, thumbnail_url').eq('id', id).maybeSingle(),
       supabase.from('daily_pujas').select('id, title, price, discounted_price, thumbnail_url').eq('id', id).maybeSingle()
     ]);
@@ -55,6 +56,8 @@ const fetchDbItemMetadata = async (id: string) => {
         offerPrice: parseFloat(String(d.offer_price).replace(/[^0-9.]/g, '')) || 1,
         image: d.image_url ? { uri: d.image_url } : require('../assets/God/god.png'),
         isDeliverable: false,
+        invoice_settings: d.invoice_settings || null,
+        categoryKey: 'one_rupee_poojas'
       };
     }
     if (general.data) {
@@ -66,6 +69,8 @@ const fetchDbItemMetadata = async (id: string) => {
         offerPrice: parseFloat(String(d.offer_price).replace(/[^0-9.]/g, '')) || 0,
         image: d.image_url ? { uri: d.image_url } : require('../assets/God/god.png'),
         isDeliverable: false,
+        invoice_settings: d.invoice_settings || null,
+        categoryKey: 'general_poojas'
       };
     }
     if (website.data) {
@@ -77,6 +82,8 @@ const fetchDbItemMetadata = async (id: string) => {
         offerPrice: parseFloat(String(d.price).replace(/[^0-9.]/g, '')) || 0,
         image: d.image ? (typeof d.image === 'string' && d.image.startsWith('http') ? { uri: d.image } : d.image) : require('../assets/God/god.png'),
         isDeliverable: true,
+        invoice_settings: d.invoice_settings || null,
+        categoryKey: 'store_products'
       };
     }
     if (problem.data) {
@@ -88,6 +95,21 @@ const fetchDbItemMetadata = async (id: string) => {
         offerPrice: parseFloat(String(d.offer_price).replace(/[^0-9.]/g, '')) || 0,
         image: d.image_url ? { uri: d.image_url } : require('../assets/God/god.png'),
         isDeliverable: false,
+        invoice_settings: d.invoice_settings || null,
+        categoryKey: 'problem_poojas'
+      };
+    }
+    if (combo.data) {
+      const d = combo.data;
+      return {
+        title: d.title,
+        subtitle: d.tagline || 'Festival Combo',
+        originalPrice: parseFloat(String(d.original_price).replace(/[^0-9.]/g, '')) || 0,
+        offerPrice: parseFloat(String(d.price).replace(/[^0-9.]/g, '')) || 0,
+        image: d.left_image_url ? { uri: d.left_image_url } : require('../assets/God/god.png'),
+        isDeliverable: false,
+        invoice_settings: d.invoice_settings || null,
+        categoryKey: 'combo_poojas'
       };
     }
     if (offer.data) {
@@ -127,6 +149,8 @@ interface CartContextType {
     offerPrice: number;
     image: any;
     isDeliverable: boolean;
+    invoice_settings?: any;
+    categoryKey?: string;
   }>;
   handleAddToCart: (id: string) => void;
   handleIncrement: (id: string) => void;
@@ -135,6 +159,7 @@ interface CartContextType {
   totalCartCount: number;
   user: any;
   refreshSession: () => Promise<void>;
+  refreshCartMetadata: (ids: string[]) => Promise<void>;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -148,6 +173,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     offerPrice: number;
     image: any;
     isDeliverable: boolean;
+    invoice_settings?: any;
+    categoryKey?: string;
   }>>({});
   const [user, setUser] = useState<any>(null);
   const { t } = useLanguage();
@@ -162,6 +189,27 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const newMeta: Record<string, any> = {};
     await Promise.all(missingIds.map(async (id) => {
+      const fetched = await fetchDbItemMetadata(id);
+      if (fetched) {
+        newMeta[id] = fetched;
+      }
+    }));
+
+    if (Object.keys(newMeta).length > 0) {
+      setDbMetadata(prev => ({ ...prev, ...newMeta }));
+    }
+  };
+
+  const refreshCartMetadata = async (ids: string[]) => {
+    const validIds = ids.filter(id => {
+      const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id);
+      return isUuid;
+    });
+
+    if (validIds.length === 0) return;
+
+    const newMeta: Record<string, any> = {};
+    await Promise.all(validIds.map(async (id) => {
       const fetched = await fetchDbItemMetadata(id);
       if (fetched) {
         newMeta[id] = fetched;
@@ -358,7 +406,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const totalCartCount = Object.values(cart).reduce((sum, val) => sum + val, 0);
 
   return (
-    <CartContext.Provider value={{ cart, dbMetadata, handleAddToCart, handleIncrement, handleDecrement, clearCart, totalCartCount, user, refreshSession }}>
+    <CartContext.Provider value={{ cart, dbMetadata, handleAddToCart, handleIncrement, handleDecrement, clearCart, totalCartCount, user, refreshSession, refreshCartMetadata }}>
       {children}
     </CartContext.Provider>
   );

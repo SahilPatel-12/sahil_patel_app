@@ -642,6 +642,12 @@ const OneRupeeManagerPage = () => {
     is_active_on_home: true,
     is_active: true,
     status: 'published',
+    invoice_settings: {
+      override_global: false,
+      gst_percent: 0,
+      discount_percent: 0,
+      delivery_charge: 0
+    },
     tagline: '',
     benefits: '',
     steps: '',
@@ -817,6 +823,7 @@ const OneRupeeManagerPage = () => {
     setFormData({
       ...initialFormState,
       ...pooja,
+      invoice_settings: pooja.invoice_settings || { override_global: false, gst_percent: 0, discount_percent: 0, delivery_charge: 0 },
       translations: pooja.translations || {},
       combo_offer: pooja.combo_offer || { title: '', description: '', original_price: '', offer_price: '', image_url: '' },
       faqs: pooja.faqs || [],
@@ -1347,6 +1354,8 @@ const OneRupeeManagerPage = () => {
                 </div>
               )}
 
+
+
             </div>
           </div>
         </div>
@@ -1532,7 +1541,7 @@ const OneRupeeManagerPage = () => {
                     padding: '8px 12px', boxShadow: '0 4px 6px rgba(15, 118, 110, 0.08)', zIndex: 10
                   }}>
                     <p style={{ margin: 0, fontSize: '10.5px', color: '#0f766e', fontWeight: '600', letterSpacing: '0.2px' }}>
-                      <strong style={{ fontWeight: '800' }}>FREE DELIVERY</strong> on orders above <strong style={{ fontWeight: '800' }}>₹149</strong>
+                      <strong style={{ fontWeight: '800' }}>FREE DELIVERY</strong> on orders above <strong style={{ fontWeight: '800' }}>₹150</strong>
                     </p>
                   </div>
                 </div>

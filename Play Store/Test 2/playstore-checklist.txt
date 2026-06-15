@@ -1,0 +1,13 @@
+✓ Android App Bundle (.aab)
+✓ App Icon
+✓ Feature Graphic
+✓ Screenshots
+✓ Privacy Policy URL
+✓ Terms & Conditions URL
+✓ Refund Policy URL
+✓ Short Description
+✓ Full Description
+✓ Contact Information
+✓ Signed Release Build
+✓ SHA1
+✓ SHA256

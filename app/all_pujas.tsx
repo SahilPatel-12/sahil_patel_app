@@ -465,7 +465,7 @@ export default function AllPujasScreen() {
       <View style={styles.footerContainer}>
         <View style={styles.footerInner}>
           <Text style={styles.footerText}>
-            <Text style={styles.footerTextBold}>{t('FREE DELIVERY')}</Text>{t(' on orders above ')}<Text style={styles.footerTextBold}>₹149</Text>
+            <Text style={styles.footerTextBold}>{t('FREE DELIVERY')}</Text>{t(' on orders above ')}<Text style={styles.footerTextBold}>₹150</Text>
           </Text>
         </View>
       </View>

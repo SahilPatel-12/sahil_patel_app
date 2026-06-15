@@ -33,6 +33,8 @@ interface CartItem {
   image: any;
   showCounter: boolean;
   isDeliverable: boolean;
+  invoice_settings?: any;
+  categoryKey?: string;
 }
 
 const ALL_PRODUCT_METADATA: Record<string, {
@@ -187,7 +189,7 @@ const ALL_PRODUCT_METADATA: Record<string, {
 export default function CartScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
-  const { cart, dbMetadata, handleAddToCart, handleIncrement, handleDecrement, clearCart, user, refreshSession } = useCart();
+  const { cart, dbMetadata, refreshCartMetadata, handleAddToCart, handleIncrement, handleDecrement, clearCart, user, refreshSession } = useCart();
 
   // Pandit Tip Dakshina
   const [panditTip, setPanditTip] = useState<number | null>(51);
@@ -211,9 +213,37 @@ export default function CartScreen() {
   const [shippingPincode, setShippingPincode] = useState('');
   const [shippingLandmark, setShippingLandmark] = useState('');
 
+  // Dynamic Global Invoice Settings
+  const [globalInvoiceSettings, setGlobalInvoiceSettings] = useState({
+    store_products: { gst_percent: 0, discount_percent: 0, delivery_charge: 100, delivery_free_above: 150 },
+    one_rupee_poojas: { gst_percent: 0, discount_percent: 0 },
+    general_poojas: { gst_percent: 0, discount_percent: 0 },
+    problem_poojas: { gst_percent: 0, discount_percent: 0 },
+    combo_poojas: { gst_percent: 0, discount_percent: 0 }
+  });
+
+  const cartKeys = Object.keys(cart).join(',');
   useEffect(() => {
     refreshSession();
-  }, []);
+    const fetchGlobalInvoiceSettings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('website_settings')
+          .select('value')
+          .eq('key', 'global_invoice_settings')
+          .maybeSingle();
+        if (data && data.value) {
+          setGlobalInvoiceSettings(data.value);
+        }
+      } catch (err) {
+        console.error('Error fetching global invoice settings in cart:', err);
+      }
+    };
+    fetchGlobalInvoiceSettings();
+    if (Object.keys(cart).length > 0) {
+      refreshCartMetadata(Object.keys(cart));
+    }
+  }, [cartKeys]);
 
   // Redirect to login if guest
   useEffect(() => {
@@ -265,6 +295,8 @@ export default function CartScreen() {
         image: dbMeta.image,
         showCounter: true,
         isDeliverable: dbMeta.isDeliverable,
+        invoice_settings: dbMeta.invoice_settings || null,
+        categoryKey: dbMeta.categoryKey || undefined,
       };
     }
 
@@ -288,15 +320,80 @@ export default function CartScreen() {
     { id: 'add_1', ...ALL_PRODUCT_METADATA.add_1 },
   ].filter(item => !cart[item.id]);
 
-  const itemTotalOriginal = cartItems.reduce((sum, item) => sum + (item.originalPrice * item.quantity), 0);
-  const itemTotalOffer = cartItems.reduce((sum, item) => sum + (item.offerPrice * item.quantity), 0);
-  const discountAmount = itemTotalOriginal - itemTotalOffer;
-  
-  const selectedTip = panditTip === null ? (parseInt(customTip) || 0) : panditTip;
-  const totalPayable = itemTotalOffer + selectedTip;
-
   const hasPujaItems = cartItems.some(item => !item.isDeliverable);
   const hasDeliverableItems = cartItems.some(item => item.isDeliverable);
+
+  // Dynamic pricing calculations based on global and item settings
+  let itemTotalOriginal = 0;
+  let itemTotalOffer = 0;
+  let gstFeeTotal = 0;
+  let shopSubtotal = 0;
+  let maxDeliveryCharge = 0;
+  if (hasDeliverableItems) {
+    const globalDeliveryCharge = globalInvoiceSettings.store_products?.delivery_charge ?? 100;
+    let computedMax = 0;
+    let anyNonOverride = false;
+    
+    cartItems.forEach(item => {
+      if (item.isDeliverable) {
+        const settings = item.invoice_settings || {};
+        if (settings.override_global === true && settings.delivery_charge !== undefined) {
+          computedMax = Math.max(computedMax, settings.delivery_charge);
+        } else {
+          anyNonOverride = true;
+        }
+      }
+    });
+    
+    maxDeliveryCharge = anyNonOverride ? Math.max(computedMax, globalDeliveryCharge) : computedMax;
+  }
+
+  cartItems.forEach((item) => {
+    // Determine invoice settings
+    const settings = item.invoice_settings || {};
+    const isOverride = settings.override_global === true;
+    
+    // Determine category key
+    const categoryKey = (item.categoryKey || (item.isDeliverable ? 'store_products' : 'general_poojas')) as 
+      'store_products' | 'one_rupee_poojas' | 'general_poojas' | 'problem_poojas' | 'combo_poojas';
+
+    const gstPercent = isOverride 
+      ? (settings.gst_percent ?? 0) 
+      : (globalInvoiceSettings[categoryKey]?.gst_percent ?? 0);
+
+    const discountPercent = isOverride 
+      ? (settings.discount_percent ?? 0) 
+      : (globalInvoiceSettings[categoryKey]?.discount_percent ?? 0);
+
+
+
+    // Perform calculations
+    const qty = item.quantity;
+    const baseOriginal = item.originalPrice * qty;
+    const baseOffer = item.offerPrice * qty;
+    
+    // Apply discount percent on offer price
+    const itemDiscount = baseOffer * (discountPercent / 100);
+    const finalOffer = baseOffer - itemDiscount;
+    
+    // Apply GST percent on final offer price
+    const itemGST = finalOffer * (gstPercent / 100);
+
+    // Sum totals
+    itemTotalOriginal += baseOriginal;
+    itemTotalOffer += finalOffer;
+    gstFeeTotal += itemGST;
+
+    if (item.isDeliverable) {
+      shopSubtotal += finalOffer;
+    }
+  });
+
+  const discountAmount = itemTotalOriginal - itemTotalOffer;
+  const deliveryCharge = hasDeliverableItems ? maxDeliveryCharge : 0;
+  
+  const selectedTip = panditTip === null ? (parseInt(customTip) || 0) : panditTip;
+  const totalPayable = Math.round(itemTotalOffer + gstFeeTotal + selectedTip + deliveryCharge);
 
   const handleCheckout = async () => {
     if (cartItems.length === 0) {
@@ -380,7 +477,12 @@ export default function CartScreen() {
           order_type: orderType,
           total_amount: totalPayable,
           payment_status: 'completed',
-          order_status: 'Pending'
+          order_status: 'Pending',
+          subtotal: itemTotalOriginal,
+          discount: discountAmount,
+          pandit_dakshina: selectedTip,
+          tax: Math.round(gstFeeTotal),
+          shipping_cost: deliveryCharge
         })
         .select('id')
         .single();
@@ -389,13 +491,24 @@ export default function CartScreen() {
       const orderId = newOrder.id;
 
       // 2. Insert order items
-      const orderItemsToInsert = cartItems.map(item => ({
-        order_id: orderId,
-        item_type: item.isDeliverable ? 'product' : 'puja',
-        item_id: item.id,
-        quantity: item.quantity,
-        price: item.offerPrice
-      }));
+      const orderItemsToInsert = cartItems.map(item => {
+        const settings = item.invoice_settings || {};
+        const categoryKey = (item.categoryKey || (item.isDeliverable ? 'store_products' : 'general_poojas')) as 
+          'store_products' | 'one_rupee_poojas' | 'general_poojas' | 'problem_poojas' | 'combo_poojas';
+        const discountPercent = settings.override_global === true 
+          ? (settings.discount_percent ?? 0) 
+          : (globalInvoiceSettings[categoryKey]?.discount_percent ?? 0);
+        
+        const finalPrice = Math.round(item.offerPrice * (1 - discountPercent / 100));
+
+        return {
+          order_id: orderId,
+          item_type: item.isDeliverable ? 'product' : 'puja',
+          item_id: item.id,
+          quantity: item.quantity,
+          price: finalPrice
+        };
+      });
 
       const { error: itemsError } = await supabase
         .from('order_items')
@@ -663,10 +776,10 @@ export default function CartScreen() {
                   <View style={styles.cardContainer}>
                     <View style={styles.sankalpHeaderRow}>
                       <Ionicons name="cube-outline" size={18} color="#ea580c" />
-                      <Text style={styles.sectionHeader}>{t('Prasad Delivery Details')}</Text>
+                      <Text style={styles.sectionHeader}>{t('Preferred Delivery Address')}</Text>
                     </View>
                     <Text style={styles.formHint}>
-                      {t('Physical products and sacred Prasad boxes will be dispatched to this delivery coordinates.')}
+                      {t('Please enter your preferred delivery address where the physical products will be dispatched.')}
                     </Text>
 
                     <View style={styles.inputGroup}>
@@ -852,13 +965,23 @@ export default function CartScreen() {
 
                   <View style={styles.receiptRow}>
                     <Text style={styles.receiptLabel}>{t('Temple Seva & GST Fee')}</Text>
-                    <Text style={[styles.receiptValue, { color: '#16a34a', fontFamily: 'Outfit-Bold' }]}>{t('FREE')}</Text>
+                    {gstFeeTotal > 0 ? (
+                      <Text style={[styles.receiptValue, { color: '#ea580c', fontFamily: 'Outfit-Bold' }]}>+ ₹{Math.round(gstFeeTotal)}</Text>
+                    ) : (
+                      <Text style={[styles.receiptValue, { color: '#16a34a', fontFamily: 'Outfit-Bold' }]}>{t('FREE')}</Text>
+                    )}
                   </View>
 
-                  <View style={styles.receiptRow}>
-                    <Text style={styles.receiptLabel}>{t('Sacred Prasad Delivery')}</Text>
-                    <Text style={[styles.receiptValue, { color: '#16a34a', fontFamily: 'Outfit-Bold' }]}>{t('FREE')}</Text>
-                  </View>
+                  {hasDeliverableItems && (
+                    <View style={styles.receiptRow}>
+                      <Text style={styles.receiptLabel}>{t('Delivery Charge')}</Text>
+                      {deliveryCharge > 0 ? (
+                        <Text style={[styles.receiptValue, { color: '#ea580c', fontFamily: 'Outfit-Bold' }]}>₹{deliveryCharge}</Text>
+                      ) : (
+                        <Text style={[styles.receiptValue, { color: '#16a34a', fontFamily: 'Outfit-Bold' }]}>{t('FREE')}</Text>
+                      )}
+                    </View>
+                  )}
 
                   <View style={styles.receiptDashedLine} />
 

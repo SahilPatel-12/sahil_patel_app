@@ -1,0 +1,14 @@
+Project Configuration Summary (Google Play Store Submission Package)
+
+* Package Name: com.mantrapuja.official
+* Version Name: 4.0.0
+* Version Code: 4
+* Build Type: Release
+* APK Status: GENERATED (File size: 136.7 MB / 143,304,103 bytes)
+* AAB Status: GENERATED (File size: 106.7 MB / 111,929,109 bytes)
+* Signing Status: SIGNED (Successfully verified using apksigner & jarsigner)
+* SHA1: 12:DA:BF:BA:DC:1C:AB:FC:44:54:10:16:36:4A:10:B5:40:93:A7:13
+* SHA256: 84:C0:D9:68:82:24:C7:D0:B1:B0:13:78:36:BB:28:C5:6C:B6:87:A8:43:57:4D:F7:93:7D:A7:B3:A0:7D:24:89
+* Release Certificate Status: FOUND & VERIFIED (CN=Mantra Puja, OU=Development, O=Mantra Puja, C=IN)
+* Debug Certificate Status: NOT USED (Verified that the default androiddebugkey is completely absent)
+* Play Store Readiness Status: READY FOR SUBMISSION (All assets, metadata, builds, and verification files are in place)

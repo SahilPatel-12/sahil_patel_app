@@ -603,6 +603,12 @@ const GeneralPoojasManagerPage = () => {
     is_active_on_home: true,
     is_active: true,
     status: 'published',
+    invoice_settings: {
+      override_global: false,
+      gst_percent: 0,
+      discount_percent: 0,
+      delivery_charge: 0
+    },
     tagline: '',
     benefits: '',
     steps: '',
@@ -778,6 +784,7 @@ const GeneralPoojasManagerPage = () => {
     setFormData({
       ...initialFormState,
       ...pooja,
+      invoice_settings: pooja.invoice_settings || { override_global: false, gst_percent: 0, discount_percent: 0, delivery_charge: 0 },
       translations: pooja.translations || {},
       combo_offer: pooja.combo_offer || { title: '', description: '', original_price: '', offer_price: '', image_url: '' },
       faqs: pooja.faqs || [],
@@ -1216,6 +1223,8 @@ const GeneralPoojasManagerPage = () => {
                   </div>
                 </div>
               )}
+
+
             </div>
           </div>
         </div>
@@ -1300,7 +1309,7 @@ const GeneralPoojasManagerPage = () => {
                     padding: '8px', zIndex: 100, boxShadow: '0 4px 6px rgba(15,118,110,0.06)'
                   }}>
                     <span style={{ fontSize: '9px', color: '#0f766e', fontWeight: '500' }}>
-                      <span style={{ fontWeight: '800' }}>FREE DELIVERY</span> on orders above <span style={{ fontWeight: '800' }}>₹149</span>
+                      <span style={{ fontWeight: '800' }}>FREE DELIVERY</span> on orders above <span style={{ fontWeight: '800' }}>₹150</span>
                     </span>
                   </div>
                 </div>
