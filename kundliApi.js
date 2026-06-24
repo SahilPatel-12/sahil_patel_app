@@ -62,22 +62,23 @@ const resolveAstrologyConfig = async (provider) => {
 
     if (supabase) {
         try {
-            const encryptionKey = process.env.EXPO_PUBLIC_ENCRYPTION_KEY || process.env.VITE_ENCRYPTION_KEY || 'sg6XisTlL2QcXSuE';
+            const encryptionKey = process.env.EXPO_PUBLIC_ENCRYPTION_KEY || process.env.VITE_ENCRYPTION_KEY;
+            if (!encryptionKey) {
+                throw new Error('Encryption key is missing in environment variables.');
+            }
+            if (encryptionKey.length < 16) {
+                throw new Error('Encryption key must be at least 16 characters long.');
+            }
             
-            // Try fetching specific provider config first
-            let { data: config } = await supabase
-                .from('api_configs')
-                .select('*')
-                .eq('provider', provider)
-                .maybeSingle();
+            // Fetch configs via RPC to bypass RLS
+            const { data: configs, error: configsErr } = await supabase.rpc('get_api_configs');
+            if (configsErr) throw configsErr;
+
+            let config = configs ? configs.find(c => c.provider === provider) : null;
 
             // Fallback to general astrology_api if specific not found or inactive
             if (!config || !config.is_active) {
-                const { data: generalConfig } = await supabase
-                    .from('api_configs')
-                    .select('*')
-                    .eq('provider', 'astrology_api')
-                    .maybeSingle();
+                const generalConfig = configs ? configs.find(c => c.provider === 'astrology_api') : null;
                 if (generalConfig && generalConfig.is_active) {
                     config = generalConfig;
                 }
@@ -189,7 +190,56 @@ router.post('/astrology/kundli', async (req, res) => {
             });
         }
 
-        console.log(`[KundliAPI] Compiling birth chart for Date: ${bData.day}/${bData.month}/${bData.year} Time: ${bData.hour}:${bData.min}`);
+        const day = Number(bData.day);
+        const month = Number(bData.month);
+        const year = Number(bData.year);
+        const hour = Number(bData.hour);
+        const min = Number(bData.min);
+        const lat = Number(parseFloat(bData.lat).toFixed(4));
+        const lon = Number(parseFloat(bData.lon).toFixed(4));
+        const tzone = Number(parseFloat(bData.tzone).toFixed(1));
+        const gender = (bData.gender || 'male').toLowerCase();
+
+        const birthDataToUse = {
+            day,
+            month,
+            year,
+            hour,
+            min,
+            lat,
+            lon,
+            tzone,
+            gender
+        };
+
+        console.log(`[KundliAPI] Compiling birth chart for Date: ${day}/${month}/${year} Time: ${hour}:${min}`);
+
+        // 1. Try DB cache first
+        if (supabase) {
+            try {
+                const { data: existing } = await supabase
+                    .from('kundlis')
+                    .select('*')
+                    .eq('day', day)
+                    .eq('month', month)
+                    .eq('year', year)
+                    .eq('hour', hour)
+                    .eq('min', min)
+                    .eq('lat', lat)
+                    .eq('lon', lon)
+                    .eq('tzone', tzone)
+                    .eq('gender', gender)
+                    .eq('language', lang)
+                    .maybeSingle();
+
+                if (existing && existing.data) {
+                    console.log(`[KundliAPI] DB cache hit for birth chart`);
+                    return res.json({ success: true, data: existing.data });
+                }
+            } catch (dbErr) {
+                console.error('[KundliAPI] DB Cache read error:', dbErr.message);
+            }
+        }
 
         // Resolve config dynamically once at beginning of request
         const config = await resolveAstrologyConfig('kundli_api');
@@ -230,7 +280,7 @@ router.post('/astrology/kundli', async (req, res) => {
         const startTime = Date.now();
 
         // Fetch all 26 endpoints concurrently
-        const tasks = endpoints.map(ep => fetchEndpointSafely(ep, bData, lang, config));
+        const tasks = endpoints.map(ep => fetchEndpointSafely(ep, birthDataToUse, lang, config));
         const taskResults = await Promise.all(tasks);
 
         // Compile results dictionary
@@ -240,6 +290,32 @@ router.post('/astrology/kundli', async (req, res) => {
         }
 
         console.log(`[KundliAPI] Completed compiled parallel fetch in ${Date.now() - startTime}ms`);
+
+        // Save to DB cache
+        if (supabase) {
+            try {
+                const cacheData = {
+                    day,
+                    month,
+                    year,
+                    hour,
+                    min,
+                    lat,
+                    lon,
+                    tzone,
+                    gender,
+                    language: lang,
+                    data: compiledData
+                };
+                await supabase
+                    .from('kundlis')
+                    .upsert(cacheData, { onConflict: 'day,month,year,hour,min,lat,lon,tzone,gender,language' });
+                console.log(`[KundliAPI] DB cache updated for birth chart`);
+            } catch (saveError) {
+                console.error('[KundliAPI] DB Cache save error:', saveError.message);
+            }
+        }
+
         return res.json({ success: true, data: compiledData });
 
     } catch (error) {
