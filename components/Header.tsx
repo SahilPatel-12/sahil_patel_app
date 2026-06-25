@@ -159,7 +159,8 @@ export default function Header() {
 const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: '#ffffff',
-    zIndex: 10,
+    zIndex: 1000,
+    elevation: 10,
   },
   container: {
     height: 64,

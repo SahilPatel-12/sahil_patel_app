@@ -15,7 +15,8 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
-  Share
+  Share,
+  Linking
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -217,6 +218,13 @@ export default function SettingsDetailScreen() {
   const [itemNamesMap, setItemNamesMap] = useState<Record<string, string>>({});
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
 
+  // Pundit Portal state
+  const [punditRecord, setPunditRecord] = useState<any>(null);
+  const [punditBookings, setPunditBookings] = useState<any[]>([]);
+  const [punditLocationsStr, setPunditLocationsStr] = useState("");
+  const [punditBio, setPunditBio] = useState("");
+  const [punditName, setPunditName] = useState("");
+
   const fetchTempleCatalog = async () => {
     try {
       const mapping: Record<string, string> = {};
@@ -341,7 +349,8 @@ export default function SettingsDetailScreen() {
 
   const fetchOrders = async (userId: string) => {
     try {
-      const { data, error } = await supabase
+      // 1. Fetch regular orders
+      const { data: regularOrders, error: orderErr } = await supabase
         .from('orders')
         .select(`
           *,
@@ -352,10 +361,70 @@ export default function SettingsDetailScreen() {
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setOrders(data || []);
-      if (data && data.length > 0) {
-        await fetchItemNames(data);
+      if (orderErr) throw orderErr;
+
+      // 2. Fetch custom pundit bookings
+      const { data: punditBookings, error: bookingErr } = await supabase
+        .from('website_store_pundit_bookings')
+        .select(`
+          *,
+          pundits:website_store_pundits(full_name, profile_photo)
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      let mergedOrders = regularOrders || [];
+
+      if (punditBookings && punditBookings.length > 0) {
+        const formattedBookings = punditBookings.map((b: any) => {
+          const punditName = b.pundits?.full_name || "Vedic Acharya";
+          
+          return {
+            id: b.id,
+            user_id: b.user_id,
+            order_type: 'puja',
+            order_status: b.status === 'Pending Confirmation' ? 'Pending' : b.status === 'Confirmed' ? 'Confirmed' : b.status === 'Completed' ? 'Completed' : 'Cancelled',
+            total_amount: parseFloat(b.dakshina) || 0,
+            subtotal: parseFloat(b.dakshina) || 0,
+            discount: 0,
+            tax: 0,
+            shipping_cost: 0,
+            created_at: b.created_at,
+            order_items: [
+              {
+                id: b.id,
+                order_id: b.id,
+                item_type: 'puja',
+                item_id: b.id,
+                item_name: b.puja_name,
+                price: parseFloat(b.dakshina) || 0,
+                quantity: 1
+              }
+            ],
+            puja_booking_details: [
+              {
+                id: b.id,
+                order_id: b.id,
+                devotee_name: b.devotee_name,
+                gotra: b.gotra,
+                preferred_date: b.booking_date,
+                preferred_time: b.booking_time,
+                special_notes: b.special_request ? `${b.special_request} [Priest: ${punditName}] [Venue: ${b.venue_type.toUpperCase()} - ${b.venue_address || 'Virtual Call'}]` : `[Priest: ${punditName}] [Venue: ${b.venue_type.toUpperCase()} - ${b.venue_address || 'Virtual Call'}]`,
+                puja_video_url: null
+              }
+            ]
+          };
+        });
+
+        // Merge and sort by created_at descending
+        mergedOrders = [...mergedOrders, ...formattedBookings].sort((a: any, b: any) => {
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
+      }
+
+      setOrders(mergedOrders);
+      if (regularOrders && regularOrders.length > 0) {
+        await fetchItemNames(regularOrders);
       }
     } catch (err) {
       console.error('Error fetching orders:', err);
@@ -364,6 +433,7 @@ export default function SettingsDetailScreen() {
 
   useEffect(() => {
     let ordersSubscription: any = null;
+    let punditBookingsSubscription: any = null;
 
     const initUserAndData = async () => {
       try {
@@ -411,6 +481,53 @@ export default function SettingsDetailScreen() {
               }
             )
             .subscribe();
+
+          // Check if this user is a Pundit and load data
+          const { data: pRec } = await supabase
+            .from('website_store_pundits')
+            .select('*')
+            .eq('user_id', parsedUser.id)
+            .maybeSingle();
+
+          if (pRec) {
+            setPunditRecord(pRec);
+            setPunditName(pRec.full_name || "");
+            setPunditBio(pRec.bio || "");
+            setPunditLocationsStr(pRec.preferred_locations ? pRec.preferred_locations.join(", ") : "");
+            
+            // Fetch bookings
+            const { data: pBookings } = await supabase
+              .from('website_store_pundit_bookings')
+              .select('*')
+              .eq('pundit_id', pRec.id)
+              .order('created_at', { ascending: false });
+
+            if (pBookings) {
+              setPunditBookings(pBookings);
+            }
+
+            // Realtime subscription for pundit bookings
+            punditBookingsSubscription = supabase
+              .channel(`pundit-bookings-${pRec.id}`)
+              .on(
+                'postgres_changes',
+                {
+                  event: '*',
+                  schema: 'public',
+                  table: 'website_store_pundit_bookings',
+                  filter: `pundit_id=eq.${pRec.id}`
+                },
+                async () => {
+                  const { data: updatedB } = await supabase
+                    .from('website_store_pundit_bookings')
+                    .select('*')
+                    .eq('pundit_id', pRec.id)
+                    .order('created_at', { ascending: false });
+                  if (updatedB) setPunditBookings(updatedB);
+                }
+              )
+              .subscribe();
+          }
         } else {
           setProfileName('Guest');
           setProfileEmail('');
@@ -432,6 +549,9 @@ export default function SettingsDetailScreen() {
     return () => {
       if (ordersSubscription) {
         supabase.removeChannel(ordersSubscription);
+      }
+      if (punditBookingsSubscription) {
+        supabase.removeChannel(punditBookingsSubscription);
       }
     };
   }, []);
@@ -483,6 +603,7 @@ export default function SettingsDetailScreen() {
   const getHeaderTitle = () => {
     switch (type) {
       case 'my_profile': return t('myProfile');
+      case 'pundit_portal': return t('Pundit Portal');
       case 'settings': return t('settings');
       case 'my_orders': return t('myOrders');
       case 'my_wallet': return t('myWallet');
@@ -743,7 +864,7 @@ export default function SettingsDetailScreen() {
       'add_1': 'Aromatic Kapur Tablets'
     };
     return orderItems.map((item: any) => {
-      const name = metadata[item.item_id] || itemNamesMap[item.item_id] || item.item_id;
+      const name = metadata[item.item_id] || item.item_name || itemNamesMap[item.item_id] || item.item_id;
       return t(name);
     }).join(' + ');
   };
@@ -1500,10 +1621,270 @@ export default function SettingsDetailScreen() {
     </View>
   );
 
+  const handleUpdateBookingStatus = async (bookingId: string, newStatus: string) => {
+    try {
+      const { error } = await supabase
+        .from('website_store_pundit_bookings')
+        .update({ status: newStatus })
+        .eq('id', bookingId);
+
+      if (error) throw error;
+
+      // Update state locally
+      setPunditBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: newStatus } : b));
+      triggerSaveMessage(t(`Booking status updated to ${newStatus}`));
+    } catch (err) {
+      console.error("Error updating booking status:", err);
+      Alert.alert(t("Update Failed"), t("Unable to update booking status."));
+    }
+  };
+
+  const handleSavePunditProfile = async () => {
+    if (!punditRecord) return;
+    try {
+      const locations = punditLocationsStr.split(",").map(loc => loc.trim()).filter(Boolean);
+      
+      const { error } = await supabase
+        .from('website_store_pundits')
+        .update({
+          full_name: punditName.trim(),
+          bio: punditBio.trim(),
+          preferred_locations: locations
+        })
+        .eq('id', punditRecord.id);
+
+      if (error) throw error;
+      triggerSaveMessage(t("Pundit profile updated successfully!"));
+    } catch (err) {
+      console.error("Error saving pundit profile:", err);
+      Alert.alert(t("Save Failed"), t("Could not save pundit profile details."));
+    }
+  };
+
+  // Pundit Portal Component
+  const renderPunditPortalView = () => {
+    if (!punditRecord) {
+      return (
+        <View style={[styles.contentCard, { alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }]}>
+          <Ionicons name="alert-circle" size={48} color="#94a3b8" />
+          <Text style={{ fontSize: 16, fontFamily: 'Outfit-Bold', color: '#1e293b', marginTop: 12 }}>
+            {t("Access Restricted")}
+          </Text>
+          <Text style={{ fontSize: 13, fontFamily: 'Outfit-Medium', color: '#64748b', textAlign: 'center', marginTop: 6, paddingHorizontal: 20 }}>
+            {t("This portal is only accessible to verified Vedic Acharyas registered on our platform.")}
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+        {/* Pundit Info Card */}
+        <View style={styles.contentCard}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+            <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: '#ea580c', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              {punditRecord.profile_photo ? (
+                <Image source={{ uri: punditRecord.profile_photo }} style={{ width: '100%', height: '100%' }} />
+              ) : (
+                <Text style={{ fontSize: 22, fontFamily: 'Outfit-Bold', color: '#ffffff' }}>
+                  {getInitials(punditName)}
+                </Text>
+              )}
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 18, fontFamily: 'Outfit-Bold', color: '#0f172a' }}>{punditName}</Text>
+                <View style={{ backgroundColor: '#fff7ed', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#ffedd5' }}>
+                  <Text style={{ fontSize: 9, fontFamily: 'Outfit-Bold', color: '#ea580c' }}>★ {punditRecord.rating}</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 12, fontFamily: 'Outfit-Medium', color: '#64748b', marginTop: 2 }}>
+                {punditRecord.experience} {t("Years Experience")} • {punditRecord.pujas_count}+ {t("Rituals Completed")}
+              </Text>
+            </View>
+          </View>
+
+          <Text style={styles.subSectionTitle}>{t("Acharya Profile Settings")}</Text>
+
+          <Text style={styles.inputLabel}>{t("FULL NAME")}</Text>
+          <TextInput
+            style={styles.profileInput}
+            value={punditName}
+            onChangeText={setPunditName}
+            placeholder={t("Enter full name")}
+          />
+
+          <Text style={styles.inputLabel}>{t("BIOGRAPHY / SPECIALTIES DESCRIPTION")}</Text>
+          <TextInput
+            style={[styles.profileInput, { height: 80, paddingTop: 10 }]}
+            value={punditBio}
+            onChangeText={setPunditBio}
+            placeholder={t("Describe your qualifications and experience")}
+            multiline
+            numberOfLines={4}
+          />
+
+          <Text style={styles.inputLabel}>{t("PREFERRED LOCATIONS (Comma Separated)")}</Text>
+          <TextInput
+            style={styles.profileInput}
+            value={punditLocationsStr}
+            onChangeText={setPunditLocationsStr}
+            placeholder={t("e.g. Varanasi, Noida, Online")}
+          />
+
+          <TouchableOpacity
+            style={styles.primaryActionButton}
+            activeOpacity={0.8}
+            onPress={handleSavePunditProfile}
+          >
+            <Text style={styles.primaryActionButtonText}>{t("SAVE ACHARYA PROFILE")}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Bookings Section */}
+        <View style={{ marginTop: 20 }}>
+          <Text style={{ fontSize: 15, fontFamily: 'Outfit-Bold', color: '#0f172a', marginBottom: 12, paddingHorizontal: 4 }}>
+            {t("Assigned Devotee Bookings")} ({punditBookings.length})
+          </Text>
+
+          {punditBookings.length === 0 ? (
+            <View style={[styles.contentCard, { alignItems: 'center', justifyContent: 'center', paddingVertical: 30 }]}>
+              <Ionicons name="calendar-outline" size={32} color="#cbd5e1" />
+              <Text style={{ fontSize: 13, fontFamily: 'Outfit-Medium', color: '#64748b', marginTop: 8 }}>
+                {t("No bookings assigned yet.")}
+              </Text>
+            </View>
+          ) : (
+            punditBookings.map((booking) => {
+              const statusColors: Record<string, { bg: string, text: string }> = {
+                'Pending Confirmation': { bg: '#fff7ed', text: '#ea580c' },
+                'Confirmed': { bg: '#ecfdf5', text: '#059669' },
+                'Completed': { bg: '#f0fdfa', text: '#0d9488' },
+                'Cancelled': { bg: '#fef2f2', text: '#dc2626' }
+              };
+              const colors = statusColors[booking.status] || { bg: '#f1f5f9', text: '#64748b' };
+
+              return (
+                <View key={booking.id} style={styles.punditCard}>
+                  {/* Card Header */}
+                  <View style={styles.punditBookingHeader}>
+                    <Text style={{ fontSize: 14, fontFamily: 'Outfit-Bold', color: '#0f172a' }}>
+                      {t(booking.puja_name)}
+                    </Text>
+                    <View style={[styles.punditBadge, { backgroundColor: colors.bg }]}>
+                      <Text style={[styles.punditBadgeText, { color: colors.text }]}>
+                        {t(booking.status.toUpperCase())}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardDivider} />
+
+                  {/* Devotee Info */}
+                  <View style={styles.punditRow}>
+                    <Ionicons name="person-outline" size={14} color="#64748b" />
+                    <Text style={styles.punditText}>
+                      <Text style={{ fontFamily: 'Outfit-Bold' }}>{t("Devotee")}:</Text> {booking.devotee_name} 
+                      {booking.gotra ? ` (Gotra: ${booking.gotra})` : ""}
+                    </Text>
+                  </View>
+
+                  <View style={styles.punditRow}>
+                    <Ionicons name="call-outline" size={14} color="#64748b" />
+                    <Text style={styles.punditText}>
+                      <Text style={{ fontFamily: 'Outfit-Bold' }}>{t("Contact Phone")}:</Text> {booking.devotee_phone}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => Linking.openURL(`tel:${booking.devotee_phone}`)}
+                      style={{ marginLeft: 8, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: '#f1f5f9' }}
+                    >
+                      <Text style={{ fontSize: 10, fontFamily: 'Outfit-Bold', color: '#ea580c' }}>{t("CALL")}</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.punditRow}>
+                    <Ionicons name="calendar-outline" size={14} color="#64748b" />
+                    <Text style={styles.punditText}>
+                      <Text style={{ fontFamily: 'Outfit-Bold' }}>{t("Preferred Timing")}:</Text> {booking.booking_date} @ {booking.booking_time}
+                    </Text>
+                  </View>
+
+                  <View style={styles.punditRow}>
+                    <Ionicons name="location-outline" size={14} color="#64748b" />
+                    <Text style={styles.punditText}>
+                      <Text style={{ fontFamily: 'Outfit-Bold' }}>{t("Venue")}:</Text> {t(booking.venue_type.toUpperCase())} 
+                      {booking.venue_address ? ` - ${booking.venue_address}` : ""}
+                    </Text>
+                  </View>
+
+                  {booking.special_request ? (
+                    <View style={[styles.punditRow, { alignItems: 'flex-start' }]}>
+                      <Ionicons name="chatbox-ellipses-outline" size={14} color="#64748b" style={{ marginTop: 2 }} />
+                      <Text style={[styles.punditText, { flex: 1 }]}>
+                        <Text style={{ fontFamily: 'Outfit-Bold' }}>{t("Special Request")}:</Text> {booking.special_request}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  <View style={styles.punditRow}>
+                    <Ionicons name="wallet-outline" size={14} color="#64748b" />
+                    <Text style={styles.punditText}>
+                      <Text style={{ fontFamily: 'Outfit-Bold' }}>{t("Dakshina Offering")}:</Text> ₹{booking.dakshina}
+                    </Text>
+                  </View>
+
+                  {/* Actions Row */}
+                  {booking.status === 'Pending Confirmation' && (
+                    <View style={styles.punditBtnRow}>
+                      <TouchableOpacity
+                        style={[styles.punditBtn, { backgroundColor: '#ef4444' }]}
+                        activeOpacity={0.8}
+                        onPress={() => handleUpdateBookingStatus(booking.id, 'Cancelled')}
+                      >
+                        <Text style={styles.punditBtnText}>{t("REJECT")}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.punditBtn, { backgroundColor: '#10b981' }]}
+                        activeOpacity={0.8}
+                        onPress={() => handleUpdateBookingStatus(booking.id, 'Confirmed')}
+                      >
+                        <Text style={styles.punditBtnText}>{t("APPROVE")}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {booking.status === 'Confirmed' && (
+                    <View style={styles.punditBtnRow}>
+                      <TouchableOpacity
+                        style={[styles.punditBtn, { backgroundColor: '#64748b' }]}
+                        activeOpacity={0.8}
+                        onPress={() => handleUpdateBookingStatus(booking.id, 'Cancelled')}
+                      >
+                        <Text style={styles.punditBtnText}>{t("CANCEL")}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.punditBtn, { backgroundColor: '#0d9488' }]}
+                        activeOpacity={0.8}
+                        onPress={() => handleUpdateBookingStatus(booking.id, 'Completed')}
+                      >
+                        <Text style={styles.punditBtnText}>{t("MARK COMPLETED")}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              );
+            })
+          )}
+        </View>
+      </ScrollView>
+    );
+  };
+
   // Selector logic
   const renderContentBody = () => {
     switch (type) {
       case 'my_profile': return renderProfileView();
+      case 'pundit_portal': return renderPunditPortalView();
       case 'settings': return renderSettingsView();
       case 'my_orders': return renderOrdersView();
       case 'my_wallet': return renderWalletView();
@@ -2716,5 +3097,59 @@ const styles = StyleSheet.create({
     color: '#64748b',
     textAlign: 'center',
     lineHeight: 18,
+  },
+  punditCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 16,
+    marginBottom: 12,
+  },
+  punditBookingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  punditBadge: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  punditBadgeText: {
+    fontSize: 10,
+    fontFamily: 'Outfit-Bold',
+  },
+  punditRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  punditText: {
+    fontSize: 13,
+    fontFamily: 'Outfit-Medium',
+    color: '#1e293b',
+    marginLeft: 8,
+  },
+  punditBtnRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderColor: '#f1f5f9',
+    paddingTop: 12,
+  },
+  punditBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  punditBtnText: {
+    fontSize: 12,
+    fontFamily: 'Outfit-Bold',
+    color: '#ffffff',
   },
 });

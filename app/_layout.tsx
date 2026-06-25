@@ -81,9 +81,15 @@ export default function RootLayout() {
               <Stack.Screen name="login" />
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="puja_detail" />
+              <Stack.Screen name="daan_detail" />
               <Stack.Screen name="settings_detail" />
               <Stack.Screen name="notifications" />
               <Stack.Screen name="share" />
+              <Stack.Screen name="rashi" />
+              <Stack.Screen name="kundli" />
+              <Stack.Screen name="panchang" />
+              <Stack.Screen name="book_pandit_puja" />
+              <Stack.Screen name="astrologer_chat" />
             </Stack>
           ) : null}
         </DrawerProvider>

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Edit3, Trash2, Bell, Sparkles, Save, Check, X, ArrowLeft,
-  RefreshCw, Loader2, Upload, AlertTriangle, Image as ImageIcon, Coins, Globe, Send
+  RefreshCw, Loader2, Upload, AlertTriangle, Image as ImageIcon, Coins, Globe, Send,
+  Music, Play, Pause, Clock
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { uploadToR2 } from './lib/r2';
@@ -13,6 +14,30 @@ export default function PushNotificationsManagerPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
+
+  // Sounds Management
+  const [sounds, setSounds] = useState([
+    { id: 'default', name: 'Default System Chime', filename: 'default', file_url: '' },
+    { id: 'bell_sound', name: 'Temple Bell Chime', filename: 'bell_sound', file_url: 'https://pub-3027d8d3defe4496978413d3c630aa44.r2.dev/notifications/bell_sound.mp3' },
+    { id: 'shankh_sound', name: 'Sacred Shankh (Conch)', filename: 'shankh_sound', file_url: 'https://pub-3027d8d3defe4496978413d3c630aa44.r2.dev/notifications/shankh_sound.mp3' },
+    { id: 'flute_sound', name: 'Mantra Flute Tune', filename: 'flute_sound', file_url: 'https://pub-3027d8d3defe4496978413d3c630aa44.r2.dev/notifications/flute_sound.mp3' }
+  ]);
+  const [playingSoundId, setPlayingSoundId] = useState(null);
+  const audioRef = useRef(null);
+
+  // Sound uploads form states
+  const [newSoundName, setNewSoundName] = useState('');
+  const [newSoundFilename, setNewSoundFilename] = useState('');
+  const [soundFile, setSoundFile] = useState(null);
+  const [uploadingSound, setUploadingSound] = useState(false);
+  const soundFileInputRef = useRef(null);
+
+  // Countdown timer state
+  const [countdownText, setCountdownText] = useState('');
+
+  // Drag and drop / database column states
+  const [isDraggingSound, setIsDraggingSound] = useState(false);
+  const [hasRecurringColumn, setHasRecurringColumn] = useState(true);
 
   // Form states
   const [isEditingId, setIsEditingId] = useState(null);
@@ -42,7 +67,12 @@ export default function PushNotificationsManagerPage() {
     target_vrat_id: '',
     coin_amount: 50,
     scheduled_date: getTodayDateString(),
-    scheduled_time: getNextHourTimeString()
+    scheduled_time: getNextHourTimeString(),
+    sound_name: 'default',
+    sound_url: '',
+    is_recurring: false,
+    preferred_ratio: '2:1',
+    is_gif: false
   };
 
   const [formData, setFormData] = useState(initialFormState);
@@ -82,10 +112,66 @@ export default function PushNotificationsManagerPage() {
     }
   };
 
+  // Fetch custom notification sounds
+  const fetchSounds = async () => {
+    try {
+      const { data, error: dbErr } = await supabase
+        .from('notification_sounds')
+        .select('*')
+        .order('created_at', { ascending: true });
+      
+      if (!dbErr && data && data.length > 0) {
+        setSounds(data);
+      }
+    } catch (err) {
+      console.warn('Could not load custom sounds from database, using seeded fallback list.', err);
+    }
+  };
+
   useEffect(() => {
     fetchNotifications();
     fetchVratPool();
+    fetchSounds();
   }, []);
+
+  // Update real-time countdown timer in push simulator
+  useEffect(() => {
+    const updateCountdown = () => {
+      if (!formData.scheduled_date || !formData.scheduled_time) {
+        setCountdownText('');
+        return;
+      }
+      try {
+        const scheduledStr = `${formData.scheduled_date}T${formData.scheduled_time}`;
+        const scheduledTime = new Date(scheduledStr).getTime();
+        const now = new Date().getTime();
+        const diff = scheduledTime - now;
+
+        if (diff <= 0) {
+          setCountdownText('Triggering immediately (Scheduled time passed)');
+        } else {
+          const secs = Math.floor((diff % (1000 * 60)) / 1000);
+          const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+          const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+          const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+          const pad = (num) => String(num).padStart(2, '0');
+
+          if (days > 0) {
+            setCountdownText(`Trigger in: ${days}d ${pad(hours)}h ${pad(mins)}m ${pad(secs)}s`);
+          } else {
+            setCountdownText(`Trigger in: ${pad(hours)}h ${pad(mins)}m ${pad(secs)}s`);
+          }
+        }
+      } catch (e) {
+        setCountdownText('');
+      }
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [formData.scheduled_date, formData.scheduled_time]);
 
   const showMessage = (msg, isError = false) => {
     if (isError) {
@@ -110,24 +196,129 @@ export default function PushNotificationsManagerPage() {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      showMessage('Please select a valid image file.', true);
+      showMessage('Please select a valid image file or animated GIF.', true);
       return;
     }
 
+    const isGif = file.type === 'image/gif';
+    const localUrl = URL.createObjectURL(file);
+    
+    // Instantly update UI with local blob URL for immediate feedback
+    setFormData(prev => ({
+      ...prev,
+      image_url: localUrl,
+      is_gif: isGif
+    }));
+
     setUploadingImage(true);
     try {
-      showMessage('Uploading image to Cloudflare R2...');
+      showMessage('Uploading attachment to Cloudflare R2...');
       const publicUrl = await uploadToR2(file, 'notifications');
       setFormData(prev => ({
         ...prev,
-        image_url: publicUrl
+        image_url: publicUrl,
+        is_gif: isGif
       }));
-      showMessage('Notification banner image uploaded successfully!');
+      showMessage('Notification banner asset uploaded successfully!');
     } catch (err) {
       console.error('Image upload error:', err);
       showMessage(`Image upload failed: ${err.message}`, true);
+      // Revert if upload fails
+      setFormData(prev => ({
+        ...prev,
+        image_url: '',
+        is_gif: false
+      }));
     } finally {
       setUploadingImage(false);
+    }
+  };
+
+  // Audio Preview Controller
+  const togglePlaySound = (sound) => {
+    if (!sound.file_url) return;
+    
+    if (playingSoundId === sound.id) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      setPlayingSoundId(null);
+    } else {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      audioRef.current = new Audio(sound.file_url);
+      audioRef.current.play().catch(e => console.error('Audio play failed:', e));
+      setPlayingSoundId(sound.id);
+      audioRef.current.onended = () => {
+        setPlayingSoundId(null);
+      };
+    }
+  };
+
+  // Save new custom sound
+  const handleSoundUpload = async (e) => {
+    e.preventDefault();
+    if (!newSoundName.trim()) return showMessage('Sound Display Name is required.', true);
+    if (!newSoundFilename.trim()) return showMessage('Native Asset Filename is required.', true);
+    if (!soundFile) return showMessage('Please choose an MP3 audio file to upload.', true);
+
+    setUploadingSound(true);
+    try {
+      showMessage('Uploading sound asset to Cloudflare R2...');
+      const publicUrl = await uploadToR2(soundFile, 'notifications/sounds');
+      
+      const payload = {
+        name: newSoundName.trim(),
+        filename: newSoundFilename.trim(),
+        file_url: publicUrl
+      };
+
+      const { data, error: insertErr } = await supabase
+        .from('notification_sounds')
+        .insert([payload])
+        .select('*');
+
+      if (insertErr) throw insertErr;
+      
+      if (data && data.length > 0) {
+        setSounds(prev => [...prev, data[0]]);
+      }
+      
+      setNewSoundName('');
+      setNewSoundFilename('');
+      setSoundFile(null);
+      if (soundFileInputRef.current) soundFileInputRef.current.value = '';
+      showMessage('Custom notification chime uploaded and registered successfully!');
+    } catch (err) {
+      console.error('Sound upload error:', err);
+      showMessage(`Sound upload failed: ${err.message}`, true);
+    } finally {
+      setUploadingSound(false);
+    }
+  };
+
+  // Delete custom sound
+  const handleDeleteSound = async (soundId) => {
+    if (['default', 'bell_sound', 'shankh_sound', 'flute_sound'].includes(soundId)) {
+      showMessage('Built-in system sounds cannot be deleted.', true);
+      return;
+    }
+    if (!window.confirm('Are you sure you want to permanently delete this custom sound?')) return;
+
+    try {
+      const { error: delErr } = await supabase
+        .from('notification_sounds')
+        .delete()
+        .eq('id', soundId);
+
+      if (delErr) throw delErr;
+      
+      setSounds(prev => prev.filter(s => s.id !== soundId));
+      showMessage('Custom chime deleted successfully.');
+    } catch (err) {
+      console.error('Delete sound error:', err);
+      showMessage(err.message, true);
     }
   };
 
@@ -147,8 +338,14 @@ export default function PushNotificationsManagerPage() {
       coin_amount: formData.notification_type === 'coins' ? parseInt(formData.coin_amount) || 0 : null,
       scheduled_date: formData.scheduled_date,
       scheduled_time: formData.scheduled_time + (formData.scheduled_time.split(':').length === 2 ? ':00' : ''),
+      sound_name: formData.sound_name,
+      sound_url: formData.sound_url || null,
       status: 'pending'
     };
+
+    if (hasRecurringColumn) {
+      payload.is_recurring = formData.is_recurring;
+    }
 
     setSaving(true);
     try {
@@ -159,16 +356,45 @@ export default function PushNotificationsManagerPage() {
           .update(payload)
           .eq('id', isEditingId);
 
-        if (updateErr) throw updateErr;
-        showMessage('Notification schedule updated successfully!');
+        if (updateErr) {
+          if (updateErr.message?.includes('is_recurring') || updateErr.code === '42703') {
+            setHasRecurringColumn(false);
+            const fallbackPayload = { ...payload };
+            delete fallbackPayload.is_recurring;
+            const { error: retryErr } = await supabase
+              .from('push_notifications')
+              .update(fallbackPayload)
+              .eq('id', isEditingId);
+            if (retryErr) throw retryErr;
+            showMessage('Notification schedule updated (Recurring daily disabled; please apply the database migration).', false);
+          } else {
+            throw updateErr;
+          }
+        } else {
+          showMessage('Notification schedule updated successfully!');
+        }
       } else {
         // Create Mode
         const { error: insertErr } = await supabase
           .from('push_notifications')
           .insert([payload]);
 
-        if (insertErr) throw insertErr;
-        showMessage('New push notification scheduled successfully!');
+        if (insertErr) {
+          if (insertErr.message?.includes('is_recurring') || insertErr.code === '42703') {
+            setHasRecurringColumn(false);
+            const fallbackPayload = { ...payload };
+            delete fallbackPayload.is_recurring;
+            const { error: retryErr } = await supabase
+              .from('push_notifications')
+              .insert([fallbackPayload]);
+            if (retryErr) throw retryErr;
+            showMessage('Notification scheduled (Recurring daily disabled; please apply the database migration).', false);
+          } else {
+            throw insertErr;
+          }
+        } else {
+          showMessage('New push notification scheduled successfully!');
+        }
       }
 
       clearForm();
@@ -187,6 +413,8 @@ export default function PushNotificationsManagerPage() {
     // Format scheduled_time into HH:MM for input fields
     const formattedTime = noti.scheduled_time ? noti.scheduled_time.substring(0, 5) : '';
 
+    const isGif = !!(noti.image_url && noti.image_url.toLowerCase().includes('gif'));
+
     setFormData({
       title: noti.title,
       body: noti.body,
@@ -195,7 +423,12 @@ export default function PushNotificationsManagerPage() {
       target_vrat_id: noti.target_vrat_id || '',
       coin_amount: noti.coin_amount || 50,
       scheduled_date: noti.scheduled_date,
-      scheduled_time: formattedTime
+      scheduled_time: formattedTime,
+      sound_name: noti.sound_name || 'default',
+      sound_url: noti.sound_url || '',
+      is_recurring: noti.is_recurring || false,
+      preferred_ratio: '2:1',
+      is_gif: isGif
     });
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -245,7 +478,7 @@ export default function PushNotificationsManagerPage() {
       <div className="page-header">
         <div>
           <h1 className="gradient-text">Push Notifications Scheduler</h1>
-          <p>Create, schedule, edit and manage global notifications, vrat/fast reminders, or coin alerts.</p>
+          <p>Create, schedule, edit and manage global notifications, vrat/fast reminders, custom sounds, or coin alerts.</p>
         </div>
         {!isEditingId && (
           <button className="primary-btn flex items-center gap-2" onClick={clearForm}>
@@ -271,7 +504,7 @@ export default function PushNotificationsManagerPage() {
 
       <div className="manager-split-layout">
         
-        {/* Left Side: CRUD Form & History */}
+        {/* Left Side: CRUD Form, Sounds Manager & History */}
         <div className="manager-form-section" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
           {/* Form */}
@@ -360,19 +593,181 @@ export default function PushNotificationsManagerPage() {
                 />
               </div>
 
-              {/* R2 Image Upload */}
+              {/* Notification Sound Selection */}
+              <div className="form-group">
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold' }}>
+                  <Music size={16} color="#FF9500" />
+                  Notification Sound Selection *
+                </label>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                  Drag any sound chip from the tray below and drop it into the target zone, or click it directly to assign.
+                </p>
+
+                {/* Drag-and-Drop Target Zone */}
+                <div 
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDraggingSound(true);
+                  }}
+                  onDragLeave={() => setIsDraggingSound(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDraggingSound(false);
+                    const soundFilename = e.dataTransfer.getData('text/plain');
+                    const selectedSound = sounds.find(s => s.filename === soundFilename);
+                    if (selectedSound) {
+                      setFormData(prev => ({
+                        ...prev,
+                        sound_name: selectedSound.filename,
+                        sound_url: selectedSound.file_url || ''
+                      }));
+                      showMessage(`Assigned sound: ${selectedSound.name}`);
+                    }
+                  }}
+                  style={{
+                    border: isDraggingSound ? '2px dashed #FF9500' : '2px dashed var(--border)',
+                    background: isDraggingSound ? 'rgba(255, 149, 0, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                    borderRadius: '12px',
+                    padding: '16px',
+                    textAlign: 'center',
+                    transition: 'all 0.2s ease',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '8px',
+                    marginBottom: '12px'
+                  }}
+                >
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(255, 149, 0, 0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#FF9500'
+                  }}>
+                    <Music size={20} className={playingSoundId ? 'animate-pulse' : ''} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-main)' }}>
+                      Active: {sounds.find(s => s.filename === formData.sound_name)?.name || 'Default Chime'}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      {formData.sound_name === 'default' ? 'System Default Chime' : `${formData.sound_name}.mp3`}
+                    </div>
+                  </div>
+                  {formData.sound_url && (
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const currentSound = sounds.find(s => s.filename === formData.sound_name);
+                        if (currentSound) togglePlaySound(currentSound);
+                      }}
+                      style={{ padding: '4px 12px', fontSize: '11px', marginTop: '4px', display: 'inline-flex', gap: '4px', alignItems: 'center' }}
+                    >
+                      {playingSoundId && sounds.find(s => s.id === playingSoundId)?.filename === formData.sound_name ? (
+                        <>
+                          <Pause size={12} />
+                          <span>Pause Preview</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play size={12} />
+                          <span>Test Chime</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                {/* Draggable Sounds Tray */}
+                <div style={{ 
+                  display: 'flex', 
+                  flexWrap: 'wrap', 
+                  gap: '8px', 
+                  padding: '10px', 
+                  background: 'rgba(255, 255, 255, 0.01)', 
+                  borderRadius: '10px', 
+                  border: '1px solid var(--border)' 
+                }}>
+                  {sounds.map((sound) => {
+                    const isSelected = formData.sound_name === sound.filename;
+                    return (
+                      <div
+                        key={sound.id}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData('text/plain', sound.filename);
+                        }}
+                        onClick={() => {
+                          setFormData(prev => ({
+                            ...prev,
+                            sound_name: sound.filename,
+                            sound_url: sound.file_url || ''
+                          }));
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 12px',
+                          background: isSelected ? 'rgba(255, 149, 0, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                          border: isSelected ? '1px solid #FF9500' : '1px solid var(--border)',
+                          borderRadius: '20px',
+                          cursor: 'grab',
+                          userSelect: 'none',
+                          fontSize: '12px',
+                          fontWeight: isSelected ? 'bold' : 'normal',
+                          transition: 'all 0.15s ease'
+                        }}
+                        title="Drag this sound to dropzone or click to select"
+                      >
+                        <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>⣿</span>
+                        <span>{sound.name}</span>
+                        {sound.file_url && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              togglePlaySound(sound);
+                            }}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              cursor: 'pointer',
+                              color: isSelected ? '#FF9500' : 'var(--text-muted)',
+                              padding: '2px',
+                              display: 'flex',
+                              alignItems: 'center'
+                            }}
+                          >
+                            {playingSoundId === sound.id ? <Pause size={12} /> : <Play size={12} />}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* R2 Image / GIF Upload & Preferred Ratio Selector */}
               <div className="form-group" style={{ border: '1px dashed var(--border)', borderRadius: 'var(--radius)', padding: '1.25rem', background: 'rgba(255,255,255,0.01)' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold' }}>
                   <ImageIcon size={16} color="#FF9500" />
-                  Attachment Image (Optional)
+                  Attachment Image or Animated GIF (Optional)
                 </label>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                  Upload a beautiful card image to be attached. Will be securely stored in Cloudflare R2 CDN.
+                  Upload a beautiful card image or animated GIF. Supports JPG, PNG, and GIF.
                 </p>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '12px' }}>
                   <input 
                     type="file" 
-                    accept="image/*" 
+                    accept="image/png, image/jpeg, image/gif" 
                     ref={imageInputRef}
                     onChange={handleImageUpload}
                     style={{ display: 'none' }}
@@ -385,7 +780,7 @@ export default function PushNotificationsManagerPage() {
                     style={{ display: 'inline-flex', gap: '8px', alignItems: 'center' }}
                   >
                     {uploadingImage ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                    {formData.image_url ? 'Change Image' : 'Choose Notification Image'}
+                    {formData.image_url ? 'Change Media File' : 'Choose Image / GIF'}
                   </button>
                   {formData.image_url && (
                     <span style={{ fontSize: '0.8rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -393,19 +788,110 @@ export default function PushNotificationsManagerPage() {
                     </span>
                   )}
                 </div>
+
+                {/* Aspect Ratio Selector */}
+                <div style={{ marginTop: '12px' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Preferred Display Aspect Ratio</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {[
+                      { value: '2:1', label: '2:1 Banner', desc: 'Standard lockscreen' },
+                      { value: '16:9', label: '16:9 Landscape', desc: 'Wide app banner' },
+                      { value: '1:1', label: '1:1 Square', desc: 'Thumbnail preview' }
+                    ].map((ratio) => {
+                      const isSelected = formData.preferred_ratio === ratio.value;
+                      return (
+                        <button
+                          key={ratio.value}
+                          type="button"
+                          onClick={() => {
+                            setFormData(prev => ({
+                              ...prev,
+                              preferred_ratio: ratio.value
+                            }));
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: '6px',
+                            borderRadius: '8px',
+                            border: isSelected ? '1.5px solid #FF9500' : '1px solid var(--border)',
+                            background: isSelected ? 'rgba(255, 149, 0, 0.08)' : 'rgba(255,255,255,0.02)',
+                            color: isSelected ? '#FF9500' : 'var(--text-main)',
+                            textAlign: 'center',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <div style={{ fontSize: '11px', fontWeight: 'bold' }}>{ratio.label}</div>
+                          <div style={{ fontSize: '9px', color: 'var(--text-muted)', marginTop: '1px' }}>{ratio.desc}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 
                 {formData.image_url && (
                   <div style={{ display: 'flex', gap: '12px', marginTop: '12px', alignItems: 'center' }}>
                     <img 
                       src={formData.image_url} 
                       alt="Notification preview" 
-                      style={{ width: '80px', height: '50px', borderRadius: '6px', objectFit: 'cover', border: '1px solid var(--border)' }} 
+                      style={{ 
+                        width: '80px', 
+                        aspectRatio: formData.preferred_ratio === '2:1' ? '2/1' : formData.preferred_ratio === '16:9' ? '16/9' : '1/1',
+                        borderRadius: '6px', 
+                        objectFit: 'cover', 
+                        border: '1px solid var(--border)' 
+                      }} 
                     />
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '300px' }}>
                       <strong>URL:</strong> {formData.image_url}
+                      {formData.image_url.toLowerCase().endsWith('.gif') && <span style={{ marginLeft: '6px', color: '#10b981', fontWeight: 'bold' }}>[GIF Animation]</span>}
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Quick Delay Presets */}
+              <div className="form-group" style={{ background: 'rgba(255, 255, 255, 0.01)', border: '1px solid var(--border)', borderRadius: '10px', padding: '10px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                  <Clock size={14} color="#FF9500" />
+                  Quick Dispatch Delay Presets
+                </label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+                  {[
+                    { label: 'Send Immediately', minutes: 0 },
+                    { label: 'In 5 Min', minutes: 5 },
+                    { label: 'In 15 Min', minutes: 15 },
+                    { label: 'In 30 Min', minutes: 30 },
+                    { label: 'In 1 Hour', minutes: 60 }
+                  ].map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => {
+                        const now = new Date();
+                        if (preset.minutes > 0) {
+                          now.setMinutes(now.getMinutes() + preset.minutes);
+                        }
+                        const yyyy = now.getFullYear();
+                        const mm = String(now.getMonth() + 1).padStart(2, '0');
+                        const dd = String(now.getDate()).padStart(2, '0');
+                        const hh = String(now.getHours()).padStart(2, '0');
+                        const min = String(now.getMinutes()).padStart(2, '0');
+                        
+                        setFormData(prev => ({
+                          ...prev,
+                          scheduled_date: `${yyyy}-${mm}-${dd}`,
+                          scheduled_time: `${hh}:${min}`
+                        }));
+                        showMessage(`Time set to: ${preset.label} (${hh}:${min})`);
+                      }}
+                      style={{ fontSize: '11px', padding: '4px 10px', flex: '1 0 auto' }}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Date / Time Scheduler */}
@@ -423,7 +909,7 @@ export default function PushNotificationsManagerPage() {
                 </div>
 
                 <div className="form-group">
-                  <label>Scheduled Time (Time-wise trigger) *</label>
+                  <label>Scheduled Time *</label>
                   <input 
                     type="time" 
                     name="scheduled_time"
@@ -432,6 +918,36 @@ export default function PushNotificationsManagerPage() {
                     onChange={handleInputChange}
                     required
                   />
+                </div>
+              </div>
+
+              {/* Recurring Schedule Switch */}
+              <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: '10px' }}>
+                <input
+                  type="checkbox"
+                  id="is_recurring"
+                  name="is_recurring"
+                  checked={formData.is_recurring}
+                  onChange={(e) => {
+                    setFormData(prev => ({
+                      ...prev,
+                      is_recurring: e.target.checked
+                    }));
+                  }}
+                  style={{
+                    width: '16px',
+                    height: '16px',
+                    accentColor: '#FF9500',
+                    cursor: 'pointer'
+                  }}
+                />
+                <div style={{ display: 'flex', flexDirection: 'column', cursor: 'pointer' }}>
+                  <label htmlFor="is_recurring" style={{ margin: 0, cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    🔁 Repeat Daily (Daily Notification Loop)
+                  </label>
+                  <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                    If enabled, this notification will repeat every single day at the specified time automatically.
+                  </span>
                 </div>
               </div>
 
@@ -457,6 +973,133 @@ export default function PushNotificationsManagerPage() {
                 </button>
               </div>
             </form>
+          </div>
+
+          {/* Custom Notification Sounds Manager */}
+          <div className="glass-card">
+            <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Music size={20} color="#FF9500" />
+              Custom Notification Sounds Manager
+            </h3>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
+              Upload and manage custom `.mp3` notification chime sounds. These filenames correspond to native assets inside your mobile app project.
+            </p>
+
+            {/* List of Sounds */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '1.5rem' }}>
+              {sounds.map((sound) => (
+                <div 
+                  key={sound.id} 
+                  style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between', 
+                    padding: '8px 12px', 
+                    background: 'rgba(255,255,255,0.02)', 
+                    border: '1px solid var(--border)', 
+                    borderRadius: '10px' 
+                  }}
+                >
+                  <div style={{ textAlign: 'left' }}>
+                    <div style={{ fontWeight: '600', fontSize: '13px' }}>{sound.name}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      Asset Name: <code style={{ color: '#FF9500' }}>{sound.filename}</code>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    {sound.file_url && (
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => togglePlaySound(sound)}
+                        style={{ padding: '6px 10px', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}
+                      >
+                        {playingSoundId === sound.id ? <Pause size={12} /> : <Play size={12} />}
+                        <span>{playingSoundId === sound.id ? 'Pause' : 'Play'}</span>
+                      </button>
+                    )}
+                    {!['default', 'bell_sound', 'shankh_sound', 'flute_sound'].includes(sound.id) && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSound(sound.id)}
+                        style={{ padding: '6px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#ef4444' }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Upload form */}
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
+              <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: 'var(--text-main)' }}>Upload New Custom Sound</h4>
+              <form onSubmit={handleSoundUpload} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="input-grid-2">
+                  <div className="form-group">
+                    <label style={{ fontSize: '0.75rem' }}>Sound Display Name *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Divine Shankh Chime"
+                      className="input-field"
+                      value={newSoundName}
+                      onChange={(e) => setNewSoundName(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label style={{ fontSize: '0.75rem' }}>Native Asset Filename *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. shankh_sound (no extension)"
+                      className="input-field"
+                      value={newSoundFilename}
+                      onChange={(e) => setNewSoundFilename(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label style={{ fontSize: '0.75rem' }}>Select MP3 Audio File *</label>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input
+                      type="file"
+                      accept="audio/mpeg, audio/mp3"
+                      ref={soundFileInputRef}
+                      onChange={(e) => setSoundFile(e.target.files?.[0] || null)}
+                      style={{ display: 'none' }}
+                    />
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => soundFileInputRef.current?.click()}
+                      style={{ fontSize: '12px', display: 'inline-flex', gap: '6px', alignItems: 'center' }}
+                    >
+                      <Upload size={14} />
+                      {soundFile ? 'Change Audio' : 'Choose Audio File'}
+                    </button>
+                    {soundFile && (
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-main)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        🎵 {soundFile.name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={uploadingSound}
+                  style={{ alignSelf: 'flex-start', fontSize: '12px', padding: '8px 16px', backgroundColor: '#FF9500', borderColor: '#FF9500' }}
+                >
+                  {uploadingSound ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  <span style={{ marginLeft: '6px' }}>Upload & Save Sound</span>
+                </button>
+              </form>
+            </div>
           </div>
 
           {/* Notifications Schedule History */}
@@ -502,12 +1145,22 @@ export default function PushNotificationsManagerPage() {
                         <td style={{ textAlign: 'left' }}>
                           <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '13px' }}>{noti.title}</div>
                           <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', lineHeight: '14px' }}>{noti.body}</div>
-                          {noti.image_url && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
-                              <img src={noti.image_url} alt="thumbnail" style={{ width: '36px', height: '22px', borderRadius: '4px', objectFit: 'cover', border: '1px solid var(--border)' }} />
-                              <span style={{ fontSize: '10px', color: '#10b981' }}>Image attached</span>
-                            </div>
-                          )}
+                          
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '6px', alignItems: 'center' }}>
+                            {noti.image_url && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <img src={noti.image_url} alt="thumbnail" style={{ width: '36px', height: '18px', borderRadius: '4px', objectFit: 'cover', border: '1px solid var(--border)' }} />
+                                <span style={{ fontSize: '10px', color: '#10b981' }}>Asset Attached</span>
+                              </div>
+                            )}
+                            {noti.sound_name && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'rgba(255,255,255,0.04)', padding: '2px 6px', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                                <Music size={10} color="#FF9500" />
+                                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Sound: {noti.sound_name}</span>
+                              </div>
+                            )}
+                          </div>
+
                           {noti.notification_type === 'vrat' && noti.target_vrat_id && (
                             <div style={{ fontSize: '10px', color: '#FF9500', marginTop: '4px', fontWeight: '600' }}>
                               🎯 Vrat Date: {noti.target_vrat_id}
@@ -516,6 +1169,11 @@ export default function PushNotificationsManagerPage() {
                           {noti.notification_type === 'coins' && noti.coin_amount && (
                             <div style={{ fontSize: '10px', color: '#eab308', marginTop: '4px', fontWeight: '600' }}>
                               🪙 Reward: {noti.coin_amount} Coins
+                            </div>
+                          )}
+                          {noti.is_recurring && (
+                            <div style={{ fontSize: '10px', color: '#3b82f6', marginTop: '4px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                              🔁 Daily Recurring Schedule
                             </div>
                           )}
                         </td>
@@ -581,14 +1239,31 @@ export default function PushNotificationsManagerPage() {
               {/* Wallpaper Background */}
               <div style={{ position: 'absolute', inset: 0, backgroundColor: '#111827', opacity: 0.85, zIndex: 0 }} />
               
-              {/* Digital Clock Mockup */}
-              <div style={{ zIndex: 1, color: '#ffffff', textAlign: 'center', marginTop: '24px', marginBottom: '32px' }}>
+              {/* Digital Clock Mockup with Countdown Timer */}
+              <div style={{ zIndex: 1, color: '#ffffff', textAlign: 'center', marginTop: '24px', marginBottom: '20px' }}>
                 <span style={{ fontSize: '32px', fontWeight: '300', fontFamily: 'monospace' }}>
                   {formData.scheduled_time || '12:00'}
                 </span>
                 <div style={{ fontSize: '10px', fontWeight: '500', color: 'rgba(255,255,255,0.7)', marginTop: '4px' }}>
                   Thursday, June 11
                 </div>
+                {countdownText && (
+                  <div style={{ 
+                    fontSize: '9px', 
+                    fontWeight: 'bold', 
+                    color: '#ffffff', 
+                    marginTop: '6px',
+                    backgroundColor: 'rgba(255, 149, 0, 0.7)',
+                    padding: '3px 8px',
+                    borderRadius: '8px',
+                    display: 'inline-block',
+                    boxShadow: '0 2px 8px rgba(255,149,0,0.3)',
+                    maxWidth: '90%',
+                    wordWrap: 'break-word'
+                  }}>
+                    ⏱️ {countdownText}
+                  </div>
+                )}
               </div>
 
               {/* Dynamic Notification Dispatch Card Mockup */}
@@ -623,14 +1298,78 @@ export default function PushNotificationsManagerPage() {
                       {formData.body || 'Type your notification message in the form fields to see a real-time preview of the alert text body.'}
                     </div>
                   </div>
-                  {formData.image_url && (
+                  {formData.image_url && formData.preferred_ratio === '1:1' && (
+                    <div style={{ position: 'relative', alignSelf: 'center', flexShrink: 0 }}>
+                      <img 
+                        src={formData.image_url} 
+                        alt="mock notification banner"
+                        style={{ 
+                          width: '44px',
+                          height: '44px',
+                          borderRadius: '6px', 
+                          objectFit: 'cover', 
+                          border: '1.5px solid rgba(255, 255, 255, 0.1)' 
+                        }}
+                      />
+                      {formData.is_gif && (
+                        <span style={{
+                          position: 'absolute',
+                          bottom: '2px',
+                          right: '2px',
+                          backgroundColor: 'rgba(0,0,0,0.8)',
+                          color: '#10b981',
+                          fontSize: '7px',
+                          fontWeight: 'bold',
+                          padding: '1px 3px',
+                          borderRadius: '3px'
+                        }}>
+                          GIF
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {formData.image_url && formData.preferred_ratio !== '1:1' && (
+                  <div style={{ position: 'relative', width: '100%', marginTop: '6px', borderRadius: '8px', overflow: 'hidden' }}>
                     <img 
                       src={formData.image_url} 
                       alt="mock notification banner"
-                      style={{ width: '42px', height: '42px', borderRadius: '6px', objectFit: 'cover', border: '1.5px solid rgba(255, 255, 255, 0.1)' }}
+                      style={{ 
+                        width: '100%',
+                        aspectRatio: formData.preferred_ratio === '2:1' ? '2/1' : '16/9',
+                        objectFit: 'cover', 
+                        border: '1.5px solid rgba(255, 255, 255, 0.1)',
+                        display: 'block'
+                      }}
                     />
-                  )}
-                </div>
+                    {formData.is_gif && (
+                      <span style={{
+                        position: 'absolute',
+                        bottom: '4px',
+                        right: '4px',
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        color: '#10b981',
+                        fontSize: '8px',
+                        fontWeight: 'bold',
+                        padding: '2px 4px',
+                        borderRadius: '3px'
+                      }}>
+                        GIF
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Selected Custom Chime Sound Banner */}
+                {formData.sound_name && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'rgba(255, 255, 255, 0.06)', padding: '4px 8px', borderRadius: '8px', alignSelf: 'flex-start', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <Music size={10} color="#FF9500" />
+                    <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '8.5px', fontWeight: '500' }}>
+                      Chime: {formData.sound_name === 'default' ? 'System Default' : `${formData.sound_name}.mp3`}
+                    </span>
+                  </div>
+                )}
 
                 {formData.notification_type === 'coins' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'rgba(234, 179, 8, 0.12)', padding: '4px 8px', borderRadius: '8px', alignSelf: 'flex-start' }}>
@@ -646,6 +1385,14 @@ export default function PushNotificationsManagerPage() {
                     <Sparkles size={10} color="#FF9500" />
                     <span style={{ color: '#FF9500', fontSize: '8.5px', fontWeight: 'bold' }}>
                       Vrat Guide Attachment Linked
+                    </span>
+                  </div>
+                )}
+
+                {formData.is_recurring && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'rgba(59, 130, 246, 0.12)', padding: '4px 8px', borderRadius: '8px', alignSelf: 'flex-start' }}>
+                    <span style={{ color: '#3b82f6', fontSize: '8.5px', fontWeight: 'bold' }}>
+                      🔁 Recurring Daily
                     </span>
                   </div>
                 )}

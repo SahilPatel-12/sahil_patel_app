@@ -703,7 +703,7 @@ const SettingsPage = () => {
       defaultName: 'Firebase Cloud Messaging',
       description: 'Used for system alerts and sending transactional push notifications.',
       icon: <Bell size={24} />,
-      status: 'upcoming'
+      status: 'active'
     },
     {
       providerKey: 'stripe_pay',
@@ -971,22 +971,47 @@ const SettingsPage = () => {
 
                     <div className="form-group">
                       <label>
-                        API Key {isAlreadyConfigured(editingProvider.providerKey) ? '(Leave blank to keep existing key)' : '*'}
+                        {editingProvider.providerKey === 'firebase_fcm' ? 'Service Account JSON Credentials' : 'API Key'} {isAlreadyConfigured(editingProvider.providerKey) ? '(Leave blank to keep existing key)' : '*'}
                       </label>
-                      <div className="input-with-icon">
-                        <Lock size={18} className="input-icon" />
-                        <input 
-                          type="password" 
-                          value={apiKey} 
+                      {editingProvider.providerKey === 'firebase_fcm' ? (
+                        <textarea
+                          rows={6}
+                          className="input-field"
+                          style={{ 
+                            fontFamily: 'monospace', 
+                            fontSize: '12px', 
+                            width: '100%', 
+                            padding: '10px', 
+                            borderRadius: '8px', 
+                            border: '1px solid #e2e8f0', 
+                            background: '#f8fafc', 
+                            color: '#0f172a' 
+                          }}
+                          value={apiKey}
                           onChange={(e) => setApiKey(e.target.value)}
                           placeholder={
-                            isAlreadyConfigured(editingProvider.providerKey) 
-                              ? "•••••••••••••••• (Configured - enter new key to replace)" 
-                              : "Enter your WhatsApp API key"
+                            isAlreadyConfigured(editingProvider.providerKey)
+                              ? "•••••••••••••••• (Service account JSON configured - paste new JSON here to replace)"
+                              : "Paste your Firebase Service Account private key JSON file content here..."
                           }
                           required={!isAlreadyConfigured(editingProvider.providerKey)}
                         />
-                      </div>
+                      ) : (
+                        <div className="input-with-icon">
+                          <Lock size={18} className="input-icon" />
+                          <input 
+                            type="password" 
+                            value={apiKey} 
+                            onChange={(e) => setApiKey(e.target.value)}
+                            placeholder={
+                              isAlreadyConfigured(editingProvider.providerKey) 
+                                ? "•••••••••••••••• (Configured - enter new key to replace)" 
+                                : "Enter your API key"
+                            }
+                            required={!isAlreadyConfigured(editingProvider.providerKey)}
+                          />
+                        </div>
+                      )}
                     </div>
 
                     <div className="form-actions">

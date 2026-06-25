@@ -1,10 +1,69 @@
 import { useState, useEffect, useRef } from 'react';
 import { 
   Edit3, Trash2, Check, AlertTriangle, Upload, Loader2, Save, X, 
-  Sparkles, Layers, RefreshCw, Flame, ArrowUp, ArrowDown
+  Sparkles, Layers, RefreshCw, Flame, ArrowUp, ArrowDown,
+  Eye, EyeOff, GripVertical
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { uploadToR2, deleteFromR2 } from './lib/r2';
+
+// Dynamic client-side image compression utility
+const compressImage = (file, maxWidth, maxHeight) => {
+  return new Promise((resolve, reject) => {
+    if (file.type === 'image/gif') {
+      // Do not compress GIFs to preserve animations
+      resolve(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        // Adjust dimensions proportionally
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Export as transparent PNG
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error('Canvas rendering failed'));
+              return;
+            }
+            const compressedFile = new File([blob], file.name, {
+              type: 'image/png',
+              lastModified: Date.now()
+            });
+            resolve(compressedFile);
+          },
+          'image/png'
+        );
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
+};
 
 export default function PujaItemsManagerPage() {
   const [activeTab, setActiveTab] = useState('flowers'); // 'flowers' or 'thalis'
@@ -18,6 +77,14 @@ export default function PujaItemsManagerPage() {
   const [isEditingId, setIsEditingId] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [pendingFile, setPendingFile] = useState(null);
+  const [pendingFilePreview, setPendingFilePreview] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Drag and Drop reordering states
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+  const [isUpdatingOrder, setIsUpdatingOrder] = useState(false);
 
   const initialFlowerForm = {
     name: '',
@@ -93,6 +160,91 @@ export default function PujaItemsManagerPage() {
     }
   };
 
+  const handleToggleVisibility = async (item) => {
+    try {
+      const newVisibility = item.is_visible !== false ? false : true;
+      const { error: err } = await supabase
+        .from('god_thalis')
+        .update({ is_visible: newVisibility })
+        .eq('id', item.id);
+
+      if (err) throw err;
+      showMessage(`Thali "${item.name}" is now ${newVisibility ? 'visible' : 'hidden'}.`);
+      fetchThalis();
+    } catch (err) {
+      console.error('Error toggling thali visibility:', err);
+      showMessage(err.message, true);
+    }
+  };
+
+  // Drag and Drop reordering handlers
+  const handleDragStart = (e, index) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index.toString());
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) return;
+    setDragOverIndex(index);
+  };
+
+  const handleDrop = async (e, dropIndex) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDragOverIndex(null);
+      setDraggedIndex(null);
+      return;
+    }
+
+    const table = activeTab === 'flowers' ? 'god_flowers' : 'god_thalis';
+    const list = activeTab === 'flowers' ? [...flowers] : [...thalis];
+    const draggedItem = list[draggedIndex];
+
+    // Rearrange array
+    list.splice(draggedIndex, 1);
+    list.splice(dropIndex, 0, draggedItem);
+
+    // Optimistically update UI state
+    const updatedList = list.map((item, idx) => ({ ...item, sort_order: idx }));
+    if (activeTab === 'flowers') {
+      setFlowers(updatedList);
+    } else {
+      setThalis(updatedList);
+    }
+
+    try {
+      setIsUpdatingOrder(true);
+      const updates = updatedList.map((item) =>
+        supabase
+          .from(table)
+          .update({ sort_order: item.sort_order })
+          .eq('id', item.id)
+      );
+
+      await Promise.all(updates);
+      showMessage('Offering sort orders updated successfully!');
+    } catch (err) {
+      console.error('Error saving new sort order:', err);
+      showMessage('Failed to save sorted order. Please refresh.', true);
+    } finally {
+      setIsUpdatingOrder(false);
+      setDragOverIndex(null);
+      setDraggedIndex(null);
+      if (activeTab === 'flowers') {
+        fetchFlowers();
+      } else {
+        fetchThalis();
+      }
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
   const handleFlowerFormChange = (e) => {
     const { name, value } = e.target;
     setFlowerForm(prev => ({
@@ -109,7 +261,7 @@ export default function PujaItemsManagerPage() {
     }));
   };
 
-  const handleImageUpload = async (e) => {
+  const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -118,45 +270,69 @@ export default function PujaItemsManagerPage() {
       return;
     }
 
+    if (pendingFilePreview) {
+      URL.revokeObjectURL(pendingFilePreview);
+    }
+
+    setPendingFile(file);
+    setPendingFilePreview(URL.createObjectURL(file));
+    showMessage(`Selected ${file.name} (Ready to upload on submit).`);
+  };
+
+  const processAndUploadFile = async (file, folder) => {
+    if (!file) return null;
+
+    let fileToUpload = file;
+    if (file.type !== 'image/gif') {
+      showMessage('Compressing image...');
+      const isFlower = folder === 'flowers';
+      fileToUpload = await compressImage(
+        file,
+        isFlower ? 256 : 1024,
+        isFlower ? 256 : 512
+      );
+      console.log(`Original: ${(file.size / 1024).toFixed(2)} KB, Compressed: ${(fileToUpload.size / 1024).toFixed(2)} KB`);
+    }
+
     setUploadingImage(true);
     setUploadProgress(0);
-    const folder = activeTab === 'flowers' ? 'flowers' : 'thalis';
-
+    showMessage(`Uploading graphic to Cloudflare R2...`);
     try {
-      showMessage(`Uploading ${activeTab === 'flowers' ? 'flower' : 'thali'} image to Cloudflare R2...`);
-      const publicUrl = await uploadToR2(file, folder, (progress) => {
+      const publicUrl = await uploadToR2(fileToUpload, folder, (progress) => {
         setUploadProgress(progress);
       });
-
-      if (activeTab === 'flowers') {
-        setFlowerForm(prev => ({ ...prev, image_url: publicUrl }));
-      } else {
-        setThaliForm(prev => ({ ...prev, image_url: publicUrl }));
-      }
-      showMessage('Image uploaded successfully to Cloudflare!');
+      return publicUrl;
     } catch (err) {
-      console.error('Upload error:', err);
-      showMessage(`Upload failed: ${err.message}`, true);
+      console.error('R2 upload failed:', err);
+      throw new Error(`Upload failed: ${err.message}`);
     } finally {
       setUploadingImage(false);
+      setUploadProgress(0);
     }
   };
 
   const handleFlowerSubmit = async (e) => {
     e.preventDefault();
     if (!flowerForm.name.trim()) return showMessage('Please provide a name.', true);
-    
-    // We can allow blank image_url initially (falls back to local asset in the app)
-    const payload = {
-      name: flowerForm.name.trim(),
-      image_url: flowerForm.image_url,
-      blossom_timing: parseInt(flowerForm.blossom_timing) || 4000,
-      shower_duration: parseInt(flowerForm.shower_duration) || 10000,
-      sort_order: parseInt(flowerForm.sort_order) || 0,
-      unlock_cost: parseInt(flowerForm.unlock_cost) || 0
-    };
 
+    setIsSaving(true);
     try {
+      let publicUrl = flowerForm.image_url;
+      const oldImageUrl = isEditingId ? flowerForm.image_url : null;
+
+      if (pendingFile) {
+        publicUrl = await processAndUploadFile(pendingFile, 'flowers');
+      }
+
+      const payload = {
+        name: flowerForm.name.trim(),
+        image_url: publicUrl,
+        blossom_timing: parseInt(flowerForm.blossom_timing) || 4000,
+        shower_duration: parseInt(flowerForm.shower_duration) || 10000,
+        sort_order: parseInt(flowerForm.sort_order) || 0,
+        unlock_cost: parseInt(flowerForm.unlock_cost) || 0
+      };
+
       if (isEditingId) {
         const { error: err } = await supabase
           .from('god_flowers')
@@ -164,6 +340,12 @@ export default function PujaItemsManagerPage() {
           .eq('id', isEditingId);
 
         if (err) throw err;
+
+        // Clean up the old image from R2 if a new one was uploaded
+        if (pendingFile && oldImageUrl && oldImageUrl !== publicUrl) {
+          await deleteFromR2(oldImageUrl);
+        }
+
         showMessage('Flower updated successfully!');
       } else {
         const { error: err } = await supabase
@@ -179,6 +361,8 @@ export default function PujaItemsManagerPage() {
     } catch (err) {
       console.error('Flower form submission error:', err);
       showMessage(err.message, true);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -186,14 +370,22 @@ export default function PujaItemsManagerPage() {
     e.preventDefault();
     if (!thaliForm.name.trim()) return showMessage('Please provide a name.', true);
 
-    const payload = {
-      name: thaliForm.name.trim(),
-      image_url: thaliForm.image_url,
-      sort_order: parseInt(thaliForm.sort_order) || 0,
-      unlock_cost: parseInt(thaliForm.unlock_cost) || 0
-    };
-
+    setIsSaving(true);
     try {
+      let publicUrl = thaliForm.image_url;
+      const oldImageUrl = isEditingId ? thaliForm.image_url : null;
+
+      if (pendingFile) {
+        publicUrl = await processAndUploadFile(pendingFile, 'thalis');
+      }
+
+      const payload = {
+        name: thaliForm.name.trim(),
+        image_url: publicUrl,
+        sort_order: parseInt(thaliForm.sort_order) || 0,
+        unlock_cost: parseInt(thaliForm.unlock_cost) || 0
+      };
+
       if (isEditingId) {
         const { error: err } = await supabase
           .from('god_thalis')
@@ -201,6 +393,12 @@ export default function PujaItemsManagerPage() {
           .eq('id', isEditingId);
 
         if (err) throw err;
+
+        // Clean up the old image from R2 if a new one was uploaded
+        if (pendingFile && oldImageUrl && oldImageUrl !== publicUrl) {
+          await deleteFromR2(oldImageUrl);
+        }
+
         showMessage('Thali updated successfully!');
       } else {
         const { error: err } = await supabase
@@ -216,6 +414,8 @@ export default function PujaItemsManagerPage() {
     } catch (err) {
       console.error('Thali form submission error:', err);
       showMessage(err.message, true);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -276,6 +476,11 @@ export default function PujaItemsManagerPage() {
     setIsEditingId(null);
     setFlowerForm(initialFlowerForm);
     setThaliForm(initialThaliForm);
+    setPendingFile(null);
+    if (pendingFilePreview) {
+      URL.revokeObjectURL(pendingFilePreview);
+    }
+    setPendingFilePreview('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -457,36 +662,67 @@ export default function PujaItemsManagerPage() {
                       type="file" 
                       accept="image/*" 
                       ref={fileInputRef}
-                      onChange={handleImageUpload}
+                      onChange={handleFileSelect}
                       style={{ display: 'none' }}
                     />
                     <button 
                       type="button" 
                       className="btn-secondary" 
-                      disabled={uploadingImage}
+                      disabled={isSaving}
                       onClick={() => fileInputRef.current?.click()}
                       style={{ display: 'inline-flex', gap: '8px', alignItems: 'center' }}
                     >
-                      {uploadingImage ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                      {flowerForm.image_url ? 'Change Image' : 'Choose PNG Graphic'}
+                      <Upload size={16} />
+                      {pendingFile || flowerForm.image_url ? 'Change Image' : 'Choose PNG Graphic'}
                     </button>
-                    {flowerForm.image_url && (
+                    {(pendingFilePreview || flowerForm.image_url) && (
                       <span style={{ fontSize: '0.8rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Check size={14} /> Image loaded
+                        <Check size={14} /> Image selected
                       </span>
                     )}
                   </div>
-                  {flowerForm.image_url && (
+                  {/* File Metadata Details */}
+                  {pendingFile && (
+                    <div style={{
+                      marginTop: '12px',
+                      padding: '10px',
+                      borderRadius: '8px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                      border: '1px solid var(--border)',
+                      fontSize: '0.85rem'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>File Name:</span>
+                        <span style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{pendingFile.name}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Format:</span>
+                        <span style={{ 
+                          fontWeight: 'bold', 
+                          color: pendingFile.type === 'image/gif' ? '#ea580c' : '#10b981'
+                        }}>
+                          {pendingFile.type === 'image/gif' ? 'GIF (Animated - No Compression)' : 'PNG/JPEG (Compressible)'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Original Size:</span>
+                        <span style={{ fontWeight: 'bold', fontFamily: 'monospace', color: 'var(--text-main)' }}>
+                          {(pendingFile.size / 1024).toFixed(1)} KB
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {(pendingFilePreview || flowerForm.image_url) && (
                     <div style={{ display: 'flex', gap: '12px', marginTop: '12px', alignItems: 'center' }}>
                       <div style={{ width: '48px', height: '48px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)', background: 'rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '6px' }}>
                         <img 
-                          src={flowerForm.image_url} 
+                          src={pendingFilePreview || flowerForm.image_url} 
                           alt="Preview" 
                           style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} 
                         />
                       </div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '300px' }}>
-                        <strong>R2 Domain URL:</strong> {flowerForm.image_url}
+                        <strong>Source:</strong> {pendingFile ? 'Local File (Pending Submit)' : flowerForm.image_url}
                       </div>
                     </div>
                   )}
@@ -494,13 +730,22 @@ export default function PujaItemsManagerPage() {
 
                 <div className="form-actions" style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                   {isEditingId && (
-                    <button type="button" className="btn-secondary" onClick={clearForm}>
+                    <button type="button" className="btn-secondary" disabled={isSaving} onClick={clearForm}>
                       Cancel Edit
                     </button>
                   )}
-                  <button type="submit" className="btn-primary" disabled={uploadingImage}>
-                    <Save size={16} />
-                    {isEditingId ? 'Update Flower' : 'Save Offering'}
+                  <button type="submit" className="btn-primary" disabled={isSaving}>
+                    {isSaving ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" style={{ marginRight: '8px' }} />
+                        {uploadProgress > 0 ? `Uploading (${uploadProgress}%)` : 'Saving...'}
+                      </>
+                    ) : (
+                      <>
+                        <Save size={16} />
+                        {isEditingId ? 'Update Flower' : 'Save Offering'}
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
@@ -555,44 +800,75 @@ export default function PujaItemsManagerPage() {
                     <Upload size={16} color="#ea580c" />
                     Thali Image (GIF or transparent PNG)
                   </label>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                    Provide a transparent image of the Aarti thali plate. Supports GIFs for flaming animations.
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px', lineHeight: '1.4' }}>
+                    Provide a transparent image of the Aarti thali plate. Supports GIFs for flaming animations. <strong style={{ color: '#ea580c' }}>Recommended size: 512 × 256 px (2:1 aspect ratio)</strong> with a transparent background to ensure it renders correctly on the mobile device screen.
                   </p>
                   <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                     <input 
                       type="file" 
                       accept="image/*" 
                       ref={fileInputRef}
-                      onChange={handleImageUpload}
+                      onChange={handleFileSelect}
                       style={{ display: 'none' }}
                     />
                     <button 
                       type="button" 
                       className="btn-secondary" 
-                      disabled={uploadingImage}
+                      disabled={isSaving}
                       onClick={() => fileInputRef.current?.click()}
                       style={{ display: 'inline-flex', gap: '8px', alignItems: 'center' }}
                     >
-                      {uploadingImage ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                      {thaliForm.image_url ? 'Change Image' : 'Choose Graphic File'}
+                      <Upload size={16} />
+                      {pendingFile || thaliForm.image_url ? 'Change Image' : 'Choose Graphic File'}
                     </button>
-                    {thaliForm.image_url && (
+                    {(pendingFilePreview || thaliForm.image_url) && (
                       <span style={{ fontSize: '0.8rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Check size={14} /> Image loaded
+                        <Check size={14} /> Image selected
                       </span>
                     )}
                   </div>
-                  {thaliForm.image_url && (
+                  {/* File Metadata Details */}
+                  {pendingFile && (
+                    <div style={{
+                      marginTop: '12px',
+                      padding: '10px',
+                      borderRadius: '8px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                      border: '1px solid var(--border)',
+                      fontSize: '0.85rem'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>File Name:</span>
+                        <span style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{pendingFile.name}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Format:</span>
+                        <span style={{ 
+                          fontWeight: 'bold', 
+                          color: pendingFile.type === 'image/gif' ? '#ea580c' : '#10b981'
+                        }}>
+                          {pendingFile.type === 'image/gif' ? 'GIF (Animated - No Compression)' : 'PNG/JPEG (Compressible)'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Original Size:</span>
+                        <span style={{ fontWeight: 'bold', fontFamily: 'monospace', color: 'var(--text-main)' }}>
+                          {(pendingFile.size / 1024).toFixed(1)} KB
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {(pendingFilePreview || thaliForm.image_url) && (
                     <div style={{ display: 'flex', gap: '12px', marginTop: '12px', alignItems: 'center' }}>
                       <div style={{ width: '48px', height: '48px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)', background: 'rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '4px' }}>
                         <img 
-                          src={thaliForm.image_url} 
+                          src={pendingFilePreview || thaliForm.image_url} 
                           alt="Preview" 
                           style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} 
                         />
                       </div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '300px' }}>
-                        <strong>R2 Domain URL:</strong> {thaliForm.image_url}
+                        <strong>Source:</strong> {pendingFile ? 'Local File (Pending Submit)' : thaliForm.image_url}
                       </div>
                     </div>
                   )}
@@ -600,13 +876,22 @@ export default function PujaItemsManagerPage() {
 
                 <div className="form-actions" style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                   {isEditingId && (
-                    <button type="button" className="btn-secondary" onClick={clearForm}>
+                    <button type="button" className="btn-secondary" disabled={isSaving} onClick={clearForm}>
                       Cancel Edit
                     </button>
                   )}
-                  <button type="submit" className="btn-primary" disabled={uploadingImage}>
-                    <Save size={16} />
-                    {isEditingId ? 'Update Thali' : 'Save Offering'}
+                  <button type="submit" className="btn-primary" disabled={isSaving}>
+                    {isSaving ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" style={{ marginRight: '8px' }} />
+                        {uploadProgress > 0 ? `Uploading (${uploadProgress}%)` : 'Saving...'}
+                      </>
+                    ) : (
+                      <>
+                        <Save size={16} />
+                        {isEditingId ? 'Update Thali' : 'Save Offering'}
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
@@ -644,18 +929,40 @@ export default function PujaItemsManagerPage() {
                 <table className="admin-table">
                   <thead>
                     <tr>
+                      <th style={{ width: '40px' }}></th>
                       <th style={{ width: '60px' }}>Graphic</th>
                       <th style={{ textAlign: 'left' }}>Offering Details</th>
                       {activeTab === 'flowers' && <th style={{ textAlign: 'left' }}>Blossom Speed</th>}
                       {activeTab === 'flowers' && <th style={{ textAlign: 'left' }}>Shower Duration</th>}
                       <th style={{ textAlign: 'left' }}>Unlock Cost</th>
                       <th style={{ width: '70px', textAlign: 'left' }}>Sort Order</th>
+                      {activeTab === 'thalis' && <th style={{ width: '90px', textAlign: 'center' }}>Visibility</th>}
                       <th style={{ width: '130px', textAlign: 'right' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(activeTab === 'flowers' ? flowers : thalis).map((item) => (
-                      <tr key={item.id} style={{ background: isEditingId === item.id ? 'rgba(234,88,12,0.06)' : 'transparent' }}>
+                    {(activeTab === 'flowers' ? flowers : thalis).map((item, index) => (
+                      <tr 
+                        key={item.id} 
+                        draggable={!isUpdatingOrder}
+                        onDragStart={(e) => handleDragStart(e, index)}
+                        onDragOver={(e) => handleDragOver(e, index)}
+                        onDrop={(e) => handleDrop(e, index)}
+                        onDragEnd={handleDragEnd}
+                        style={{ 
+                          background: isEditingId === item.id 
+                            ? 'rgba(234,88,12,0.06)' 
+                            : dragOverIndex === index 
+                              ? 'rgba(234, 88, 12, 0.12)' 
+                              : 'transparent',
+                          opacity: draggedIndex === index ? 0.4 : 1,
+                          transition: 'background-color 0.15s ease',
+                          borderBottom: dragOverIndex === index ? '2px solid #ea580c' : '1px solid var(--border)'
+                        }}
+                      >
+                        <td style={{ verticalAlign: 'middle', cursor: 'grab', textAlign: 'center' }}>
+                          <GripVertical size={16} style={{ color: 'var(--text-muted)', opacity: 0.6 }} />
+                        </td>
                         <td>
                           <div style={{ 
                             width: '40px', 
@@ -678,7 +985,9 @@ export default function PujaItemsManagerPage() {
                         </td>
                         <td>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}>
-                            <span style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{item.name}</span>
+                            <span style={{ fontWeight: 'bold', color: item.is_visible === false ? 'var(--text-muted)' : 'var(--text-main)' }}>
+                              {item.name}
+                            </span>
                             {item.image_url ? (
                               <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 R2 CDN linked
@@ -717,6 +1026,30 @@ export default function PujaItemsManagerPage() {
                         <td>
                           <span style={{ fontWeight: '500', color: 'var(--text-main)' }}>{item.sort_order}</span>
                         </td>
+                        {activeTab === 'thalis' && (
+                          <td style={{ textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleVisibility(item)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: item.is_visible !== false ? '#10b981' : '#ef4444',
+                                padding: '6px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'color 0.15s ease',
+                                borderRadius: '4px',
+                                backgroundColor: 'rgba(255, 255, 255, 0.02)'
+                              }}
+                              title={item.is_visible !== false ? 'Visible in App (Click to Hide)' : 'Hidden in App (Click to Show)'}
+                            >
+                              {item.is_visible !== false ? <Eye size={18} /> : <EyeOff size={18} />}
+                            </button>
+                          </td>
+                        )}
                         <td>
                           <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
                             <button 

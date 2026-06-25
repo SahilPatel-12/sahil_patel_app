@@ -65,13 +65,10 @@ export async function registerForPushNotificationsAsync() {
       return null;
     }
 
-    // Retrieve EAS Project ID from app configuration
-    const projectId =
-      Constants.expoConfig?.extra?.eas?.projectId ??
-      Constants.easConfig?.projectId;
-
-    const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-    console.log('[Notifications] Expo Push Token obtained:', token);
+    // Retrieve native device token (FCM token on Android) instead of Expo Push Token
+    const tokenObj = await Notifications.getDevicePushTokenAsync();
+    const token = tokenObj.data;
+    console.log('[Notifications] Device Push Token obtained:', token);
 
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
@@ -80,6 +77,29 @@ export async function registerForPushNotificationsAsync() {
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#FF9500',
       });
+
+      // Dynamically register channels for all custom sounds registered in Supabase
+      try {
+        const { data: dbSounds } = await supabase
+          .from('notification_sounds')
+          .select('filename, name');
+        
+        if (dbSounds) {
+          for (const s of dbSounds) {
+            if (s.filename === 'default') continue;
+            await Notifications.setNotificationChannelAsync(s.filename, {
+              name: s.name,
+              importance: Notifications.AndroidImportance.MAX,
+              sound: `${s.filename}.mp3`,
+              vibrationPattern: [0, 250, 250, 250],
+              lightColor: '#FF9500',
+            });
+            console.log(`[Notifications] Registered Android channel for custom sound: ${s.filename}`);
+          }
+        }
+      } catch (channelErr) {
+        console.error('[Notifications] Failed to load custom sound channels:', channelErr);
+      }
     }
 
     // Save token to Supabase

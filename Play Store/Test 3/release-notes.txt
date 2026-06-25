@@ -1,9 +1,10 @@
 Mantra Puja Release Notes (Version 4.0.0, Version Code 4):
 
-- Added dynamic delivery charge calculations of ₹100 for shop orders under ₹150, with free delivery for orders above ₹150.
-- Mentioned delivery charges clearly on checkout invoice summary card.
-- Updated free delivery thresholds across all admin pages and customer-facing panels to ₹150.
-- Performance improvements and critical bug fixes for production release.
-- Enhanced stability for online Puja booking and live sessions.
-- Faster loading and precise planetary calculations in Kundli and Vedic Panchang.
-- Updated to Version 4.0.0 with fully verified signing configurations for the Play Store.
+- Devotional God Screen Enhancements:
+  * Reordered pooja offerings options, placing the Aarti Thali first followed by Flower selection.
+  * Added a direct-play toggle on the Aarti Thali button to start or stop the ritual instantly.
+  * Synchronized the selected flower shower animation to fall and blossom continuously alongside the Aarti.
+  * Integrated a premium Ujjain Mahakal Aarti background melody that loops automatically during the ritual.
+  * Added periodic temple bell ringing and chime sound effects that trigger automatically every 3 seconds while Aarti is active.
+  * Made the hanging bells highly responsive to manual taps.
+- General performance improvements, stability updates, and API connectivity enhancements.

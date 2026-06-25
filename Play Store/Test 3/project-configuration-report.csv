@@ -30,9 +30,9 @@ Release Build,APK Generated,YES,Play Store/Test 3/app-release.apk,VALID,Compiled
 Release Build,AAB Generated,YES,Play Store/Test 3/app-release.aab,VALID,Compiled release AAB available
 Release Build,APK File Path,Play Store/Test 3/app-release.apk,N/A,VALID,Destination path of APK
 Release Build,AAB File Path,Play Store/Test 3/app-release.aab,N/A,VALID,Destination path of AAB
-Release Build,APK Size,143304103 bytes (136.7 MB),Play Store/Test 3/build-info.txt,VALID,Final compiled APK file size
-Release Build,AAB Size,111929109 bytes (106.7 MB),Play Store/Test 3/build-info.txt,VALID,Final compiled AAB file size
-Release Build,Build Date,"Saturday, Jun 13, 2026",Play Store/Test 3/build-info.txt,VALID,Audit log date
+Release Build,APK Size,158573807 bytes (151.2 MB),Play Store/Test 3/build-info.txt,VALID,Final compiled APK file size
+Release Build,AAB Size,127011136 bytes (121.1 MB),Play Store/Test 3/build-info.txt,VALID,Final compiled AAB file size
+Release Build,Build Date,"Monday, Jun 15, 2026",Play Store/Test 3/build-info.txt,VALID,Audit log date
 Release Build,Build Status,SUCCESSFUL,Play Store/Test 3/build-info.txt,VALID,Successfully compiled and signed
 Play Store,App Icon Available,YES,Play Store/Test 3/assets/app-icon-512x512.png,VALID,Resolution: 512x512 PNG
 Play Store,Feature Graphic Available,YES,Play Store/Test 3/assets/feature-graphic-1024x500.png,VALID,Resolution: 1024x500 PNG
@@ -42,7 +42,7 @@ Play Store,Terms URL,https://www.mantrapuja.com/terms-and-conditions,Play Store/
 Play Store,Refund Policy URL,https://www.mantrapuja.com/refund-policy,Play Store/Test 3/refund-policy-url.txt,VALID,Public refund policy web page
 Play Store,Contact Email,support@mantrapuja.official,Play Store/Test 3/contact-information.txt,VALID,Official support email address
 Play Store,Short Description Available,YES,Play Store/Test 3/short-description.txt,VALID,Length: 76 characters (max 80)
-Play Store,Full Description Available,YES,Play Store/Test 3/app-description.txt,VALID,Length: 2600 characters (max 4000)
+Play Store,Full Description Available,YES,Play Store/Test 3/full-description.txt,VALID,Length: 2600 characters (max 4000)
 Firebase,Firebase Config Present,YES,android/app/google-services.json,VALID,Firebase configuration exists
 Firebase,google-services.json Present,YES,android/app/google-services.json,VALID,Loaded Google Services metadata
 Firebase,Firebase Project ID,mantrapujaapp,android/app/google-services.json,VALID,Matches firebase dashboard project name

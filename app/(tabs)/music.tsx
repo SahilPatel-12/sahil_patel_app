@@ -10,7 +10,12 @@ import {
   Platform,
   UIManager,
   StatusBar,
-  ActivityIndicator
+  ActivityIndicator,
+  Modal,
+  Image,
+  TextInput,
+  ImageBackground,
+  Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "../../constants/Colors";
@@ -19,244 +24,304 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { bhajanSupabase } from '../../services/bhajanSupabase';
+import { supabase } from '../../services/supabase';
+import { useLocalSearchParams } from 'expo-router';
 import DraggableCalendarButton from "../../components/DraggableCalendarButton";
+import { BlurView } from 'expo-blur';
+import Svg, { Path, Circle } from 'react-native-svg';
+import * as Haptics from 'expo-haptics';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
-// Localized tracks database
-const TRACKS_DATABASE = [
-  {
-    id: 't1',
-    title: 'Shiv Tandav Stotram',
-    artist: 'Ravana Chanted Chords',
-    duration: '3:45',
-    durationSec: 225,
-    title_Hindi: 'शिव ताण्डव स्तोत्रम्',
-    artist_Hindi: 'रावण रचित ओजस्वी राग',
-    title_Sanskrit: 'शिवताण्डवस्तोत्रम्',
-    artist_Sanskrit: 'रावणकृतम् ओजस्वी स्वरम्',
-    title_Gujarati: 'શિવ તાંડવ સ્તોત્રમ',
-    artist_Gujarati: 'રાવણ રચિત ઓજસ્વી રાગ',
-    title_Marathi: 'शिव तांडव स्तोत्रम्',
-    artist_Marathi: 'रावण रचित ओजस्वी राग',
-    title_Tamil: 'சிவ தாண்டவ ஸ்தோத்திரம்',
-    artist_Tamil: 'இராவணன் இயற்றிய உக்கிர ராகம்',
-    title_Telugu: 'శివ తాండవ స్తోత్రం',
-    artist_Telugu: 'రావణ ప్రణీత ఓజస్వి రాగం',
-    
-    // Synced verses translated dynamically
-    lyrics: {
-      en: [
-        'Jatatavigalajjala pravahapavitasthale...',
-        'Galeavalambya lambitam bhujangatungamalikam...',
-        'Damaddama ddama ddama ninnadavadamarvayam...',
-        'Chakara chandatandavam tanotu nah shivah shivam...'
-      ],
-      Sanskrit: [
-        'जटाटवीगलज्जलप्रवाहपावितस्थले...',
-        'गलेऽवलम्ब्य लम्बितां भुजङ्गतुङ्गमालिकाम्...',
-        'डमड्डमड्डमड्डमन्निनादवड्डमर्वयम्...',
-        'चकार चण्डताण्डवं तनोतु नः शिवः शिवम्...'
-      ],
-      Hindi: [
-        'जटाटवी से निकलता हुआ जल जिसके कंठ को पवित्र करता है...',
-        'और उनके गले में सर्पों की विशाल माला लटकी हुई है...',
-        'डमरू की डम-डम ध्वनि से दिशाएं गुंजायमान हैं...',
-        'ऐसे तांडव नृत्य करने वाले भगवान शिव हमारा कल्याण करें।'
-      ],
-      Gujarati: [
-        'જટાટવીમાંથી નીકળતા જળ પ્રવાહથી પવિત્ર થયેલા કંઠ વાળા...',
-        'તેમના ગળામાં સાપોની વિશાળ માળા લટકી રહી છે...',
-        'ડમરુના ડમ-ડમ અવાજથી દિશાઓ ગુંજી રહી છે...',
-        'આવા તાંડવ નૃત્ય કરનાર ભગવાન શિવ અમારું કલ્યાણ કરે.'
-      ],
-      Marathi: [
-        'જટાંમધૂન વાહણાર્યા ગંગેચ્યા પ્રવાહાને પવિત્ર ઝાલેલ્યા ગળ્યાવર...',
-        'ગળ્યાત સાપાંચ્યા માળા લટકત આહેત...',
-        'ડમરૂચ્યા ડમ-ડમ આવાજાને દિશા ગુંજત આહેત...',
-        'અસા ઉગ્ર તાંડવ કરણાર્યા ભગવાન્ શિવાંની આમચે કલ્યાણ કરાવા.'
-      ],
-      Tamil: [
-        'ஜடாமுடியில் இருந்து வழியும் கங்கை நீரால் தூய்மையான கழுத்தை உடையவர்...',
-        'அவரது கழுத்தில் பெரிய பாம்புகள் மாலையாக தொங்குகின்றன...',
-        'உடுக்கையின் டம்-டம் ஓசை திசையெங்கும் ஒலிக்கிறது...',
-        'அத்தகைய தாண்டவம் ஆடும் சிவபெருமான் நமக்கு நன்மைகளை அருளட்டும்.'
-      ],
-      Telugu: [
-        'జటాజూటం నుండి ప్రవహించే గంగా జలాలచే పవిత్రమైన కంఠము గలవాడు...',
-        'అతని మెడలో సర్పముల పెద్ద దండలు వేలాడుతున్నాయి...',
-        'డమరుకం యొక్క డం-డం నాదము దిక్కులన్నిటా మారుమోగుతోంది...',
-        'అలా తాండవ నృత్యము చేసే శివుడు మనకు మంగళములను ప్రసాదించుగాక.'
-      ]
-    }
-  },
-  {
-    id: 't2',
-    title: 'Maha Mrityunjaya Mantra',
-    artist: 'Vedic Chanting Pandits',
-    duration: '2:15',
-    durationSec: 135,
-    title_Hindi: 'महामृत्युंजय महामंत्र',
-    artist_Hindi: 'काशि के वैदिक पंडित',
-    title_Sanskrit: 'महामृत्युञ्जयमहामन्त्रः',
-    artist_Sanskrit: 'काशीविश्वेश्वरवैदिकविद्',
-    title_Gujarati: 'મહામૃત્યુંજય મહામંત્ર',
-    artist_Gujarati: 'કાશીના વેદ પાઠી પંડિતો',
-    title_Marathi: 'महामृत्युंजय महामंत्र',
-    artist_Marathi: 'काशीचे वैदिक पंडित',
-    title_Tamil: 'மகா மிருத்யுஞ்சய மந்திரம்',
-    artist_Tamil: 'வாரணாசி வேத பண்டிதர்கள்',
-    title_Telugu: 'మహామృత్యుంజయ మహామంత్రం',
-    artist_Telugu: 'కాశీ వేద పండితులు',
-    
-    lyrics: {
-      en: [
-        'Om Tryambakam Yajamahe...',
-        'Sugandhim Pushtivardhanam...',
-        'Urvarukamiva Bandhanan...',
-        'Mrityor Mukshiya Mamritat...'
-      ],
-      Sanskrit: [
-        'ॐ त्र्यम्बकम् यजामहे...',
-        'सुगन्धिम् पुष्टिवर्धनम्...',
-        'उर्वारुकमिव बन्धनान्...',
-        'मृत्योर्मुक्षीय माऽमृतात्...'
-      ],
-      Hindi: [
-        'हम त्रिनेत्रधारी भगवान शिव की आराधना करते हैं...',
-        'जो सुगंधित हैं और हमारा पोषण करते हैं...',
-        'जैसे पका हुआ खरबूजा बेल के बंधन से मुक्त होता है...',
-        'वैसे ही हमें मृत्यु और संसार के बंधनों से मोक्ष प्राप्त हो।'
-      ],
-      Gujarati: [
-        'અમે ત્રિનેત્રધારી ભગવાન શિવની આરાધના કરીએ છીએ...',
-        'જેઓ સુગંધિત છે અને આપણું પોષણ કરે છે...',
-        'જેમ પાકેલું તડબૂચ વેલાના બંધનમાંથી મુક્ત થાય છે...',
-        'તેમ જ અમને મૃત્યુ અને સંસારના બંધનોમાંથી મોક્ષ મળે.'
-      ],
-      Marathi: [
-        'આમ્હી ત્રિનેત્રધારી ભગવાન્ શિવાંચી આરાધના કરતો...',
-        'જે સુગંધિત આહેત આણિ આમચે પોષણ કરત્યાત્...',
-        'જસે પિકલેલે કલિંગડ વેલીચ્યા બંધનાતૂન આપોઆપ મુક્ત હોતે...',
-        'તસેચ આમચી મૃત્યુ આણિ મોહાચ્યા બંધનાતૂન મુક્તતા વ્હાવી.'
-      ],
-      Tamil: [
-        'முக்கண்ணனான சிவபெருமானை நாங்கள் வணங்குகிறோம்...',
-        'அவர் நறுமணம் மிக்கவர் மற்றும் எங்களைக் காப்பவர்...',
-        'வெள்ளரிப்பழம் கொடியிலிருந்து விடுபடுவது போல...',
-        'நாங்கள் மரண பயத்திலிருந்து விடுபட்டு அழியா நிலையை அடைவோம்.'
-      ],
-      Telugu: [
-        'మేము ముక్కంటి అయిన శివుని ఆరాధిస్తున్నాము...',
-        'ఆయన సువాసనభరితుడు మరియు మమ్ములను పోషించేవాడు...',
-        'పండిన దోసకాయ తొడిమ నుండి విడివడినట్లుగా...',
-        'మరణ బంధాల నుండి మమ్ములను విముక్తులను చేసి మోక్షాన్ని ప్రసాదించు.'
-      ]
-    }
-  },
-  {
-    id: 't3',
-    title: 'Hanuman Chalisa',
-    artist: 'Devotional Chorus Band',
-    duration: '4:20',
-    durationSec: 260,
-    title_Hindi: 'हनुमान चालीसा',
-    artist_Hindi: 'भक्तिमय सुर संगम',
-    title_Sanskrit: 'हनुमच्चालीसास्तोत्रम्',
-    artist_Sanskrit: 'तुलसीदासकृत मधुरस्वरम्',
-    title_Gujarati: 'હનુમાન ચાલીસા',
-    artist_Gujarati: 'ભક્તિમય સૂર સંગમ',
-    title_Marathi: 'हनुमान चालीसा',
-    artist_Marathi: 'भक्तिमय सूर संगम',
-    title_Tamil: 'அனுமன் சாலிசா',
-    artist_Tamil: 'பக்தி ராக பஜனை குழு',
-    title_Telugu: 'హనుమాన్ చాలీసా',
-    artist_Telugu: 'భక్తిమయ స్వర బృందం',
-    
-    lyrics: {
-      en: [
-        'Shree Guru Charan Saroj Raj, Nij Manu Mukuru Sudhari...',
-        'Barnau Raghuvar Bimal Jasu, Jo Dayaku Phal Chari...',
-        'Buddhiheen Tanu Janike, Sumirau Pawan Kumar...',
-        'Bal Budhi Vidya Dehu Mohi, Harahu Kalesh Bikar...'
-      ],
-      Sanskrit: [
-        'श्रीगुरु चरण सरोज रज, निज मनु मुकुरु सुधारि।',
-        'बरनउँ रघुबर बिमल जसु, जो दायकु फल चारि॥',
-        'बुद्धिहीन तनु जानिके, सुमिरौ पवन कुमार।',
-        'बल बुधि बिद्या देहु मोहि, हरहु कलेस बिकार॥'
-      ],
-      Hindi: [
-        'श्री गुरुदेव के चरण कमलों की धूलि से अपने मन रूपी दर्पण को स्वच्छ कर...',
-        'मैं श्री रघुवीर के निर्मल यश का गान करता हूँ, जो चारों फल देने वाला है।',
-        'स्वयं को बुद्धिहीन जानकर, मैं पवनपुत्र हनुमान का स्मरण करता हूँ...',
-        'हे बजरंगबली! मुझे बल, बुद्धि और विद्या प्रदान करें तथा मेरे कष्टों को हर लें।'
-      ],
-      Gujarati: [
-        'શ્રી ગુરુદેવના ચરણ કમળોની રજથી પોતાના મનરૂપી અરીસાને સાફ કરી...',
-        'હું શ્રી રઘુવીરના પવિત્ર યશનું ગાન કરું છું, જે ચારેય પુરુષાર્થ આપનાર છે.',
-        'પોતાને બુદ્ધિહીન સમજીને, હું પવનપુત્ર હનુમાનનું સ્મરણ કરું છું...',
-        'એ બજરંગબલી! મને બળ, બુદ્ધિ અને વિદ્યા આપો તથા મારા કષ્ટો હરી લો.'
-      ],
-      Marathi: [
-        'સદ્ગુરૂંચ્યા ચરણ કમલાંચ્યા ધૂળીને આપલ્યા મનરૂપી આરશા સ્વચ્છ કરૂન...',
-        'મી શ્રીરામચંદ્રાંચ્યા પવિત્ર યશાચે વર્ણન કરતો, જે ચારહી પુરુષાર્થ દેતે.',
-        'સ્વતઃલા બુદ્ધિહીન સમજૂન મી પવનપુત્ર હનુમંતાંચે સ્મરણ કરતો...',
-        'હે બજરંગબલી! મલા બલ, બુદ્ધિ આણિ વિદ્યા દ્યા વ માઝે સર્વ ત્રાસ દૂર કરા.'
-      ],
-      Tamil: [
-        'ஸ்ரீ குருவின் தாமரை பாத தூசியால் என் மனக் கண்ணாடியைத் தூய்மை செய்து...',
-        'நான்கு பலன்களையும் தரக்கூடிய ரகுவீரனின் புகழைப் பாடுகிறேன்.',
-        'என்னை அறிவற்றவனாக உணர்ந்து, பவனகுமாரனான அனுமனை தியானிக்கிறேன்...',
-        'எனக்கு பலம், புத்தி, மற்றும் கல்வியைத் தந்து, என் துயரங்களை நீக்குங்கள்.'
-      ],
-      Telugu: [
-        'శ్రీ గురుదేవుని పాద పద్మముల ధూళితో నా మనస్సనే అద్దాన్ని శుభ్రం చేసుకొని...',
-        'ధర్మ అర్థ కామ మోక్షాలనే నాలుగు ఫలాలను ఇచ్చే రాముని కీర్తిని పాడుతున్నాను.',
-        'నన్ను నేను బుద్ధిహీనునిగా భావించి, పవనకుమారుడైన హనుమంతుని తలుస్తున్నాను...',
-        'ఓ బజరంగబలి! నాకు బలం, బుద్ధి మరియు విద్యను ప్రసాదించి నా కష్టాలను హరించు.'
-      ]
-    }
+// Map categories to high-resolution, photographic deity images from assets/God
+const getDeityAvatar = (name: string, iconUrl?: string) => {
+  if (iconUrl && iconUrl.trim() !== '') {
+    return { uri: iconUrl };
   }
-];
+  const normalized = name.toLowerCase();
+  if (normalized.includes('shiv')) return require('../../assets/God/god1.png');
+  if (normalized.includes('laxmi') || normalized.includes('lakshmi')) return require('../../assets/God/god.png');
+  if (normalized.includes('ganesh')) return require('../../assets/God/Mahakal Ujjain.png');
+  if (normalized.includes('hanuman')) return require('../../assets/God/_ (5).jpeg');
+  if (normalized.includes('durga')) return require('../../assets/God/Kedarnath.png');
+  if (normalized.includes('krishna')) return require('../../assets/God/Omkarashwar.png');
+  if (normalized.includes('venkat')) return require('../../assets/God/Lord Venkateswara Images Full Hd Wallpaper 1.png');
+  return require('../../assets/God/god1.png'); // Default fallback
+};
 
 export default function MusicScreen() {
-  const { t, locale } = useLanguage();
-  const activeLocale = locale as 'en' | 'Hindi' | 'Sanskrit' | 'Gujarati' | 'Marathi' | 'Tamil' | 'Telugu';
+  const { t } = useLanguage();
+  const { playTrackId, search } = useLocalSearchParams<{ playTrackId?: string; search?: string }>();
 
-  // Dynamic Bhajans and Categories state
+  // Dynamic Chants and Categories state
   const [tracks, setTracks] = useState<any[]>([]);
-  const [categories, setCategories] = useState<string[]>(['All']);
+  const [categories, setCategories] = useState<{name: string, icon_url?: string}[]>([{ name: 'All' }]);
   const [activeTrackIndex, setActiveTrackIndex] = useState(0);
   const activeTrack = tracks[activeTrackIndex];
   
   const [lyricIndex, setLyricIndex] = useState(0);
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [loading, setLoading] = useState(true);
+  
+  // Navigation detail state
+  const [selectedDetailCategory, setSelectedDetailCategory] = useState<string | null>(null);
+  
+  // Tab states matching mockups
+  const [activeDiscoverTab, setActiveDiscoverTab] = useState<'Recently' | 'Popular' | 'Similar' | 'Trending'>('Recently');
+  const [activeDetailTab, setActiveDetailTab] = useState<'Songs' | 'Artists' | 'Album' | 'Playlist'>('Songs');
+  
+  // Modal & Search states
+  const [isPlayerModalVisible, setIsPlayerModalVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [likedTracks, setLikedTracks] = useState<Record<string, boolean>>({});
+  const [visibleTracksCount, setVisibleTracksCount] = useState(10);
+  const [isShuffleActive, setIsShuffleActive] = useState(false);
+  const [showQueueInPlayer, setShowQueueInPlayer] = useState(false);
+  const [isSeeking, setIsSeeking] = useState(false);
+  const [seekProgress, setSeekProgress] = useState(0);
+  const sliderWidthRef = useRef(0);
+
+  const [waveHeights, setWaveHeights] = useState([8, 12, 16, 10, 14, 18, 12, 8, 14, 10, 16, 12, 18, 14, 10, 8]);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
+  const [playerVolume, setPlayerVolume] = useState(1.0);
+
+  // Bell count
+  const [bellCount, setBellCount] = useState(0);
+
+  // Secondary player instance for Ringing Temple Bell overlay sound
+  const bellSoundPlayer = useAudioPlayer(require('../../assets/Sound/bell_sound.mp3'));
+
+  // Animated value for swinging the temple bell
+  const bellRotation = useRef(new Animated.Value(0)).current;
+
+  const bellRotateInterpolate = bellRotation.interpolate({
+    inputRange: [-1, 0, 1],
+    outputRange: ['-18deg', '0deg', '18deg']
+  });
+
+  // Floating animations state
+  const [floaters, setFloaters] = useState<{ id: number; offset: number; anim: Animated.Value }[]>([]);
+  const floaterIdRef = useRef(0);
+
+  // Mandala pulse scale
+  const mandalaScale = useRef(new Animated.Value(1)).current;
+
+  // Milestone celebration states
+  const [milestoneText, setMilestoneText] = useState<string | null>(null);
+  const celebrationScale = useRef(new Animated.Value(0.5)).current;
+  const celebrationOpacity = useRef(new Animated.Value(0)).current;
+
+  // Ripples state
+  const [ripples, setRipples] = useState<{ id: number; anim: Animated.Value }[]>([]);
+  const rippleIdRef = useRef(0);
+
+  // Bell audio visualizer waves
+  const bellWaves = useRef(Array.from({ length: 11 }, () => new Animated.Value(0.15))).current;
+
+  // Play/pause button mandala rotation animation
+  const playMandalaRotation = useRef(new Animated.Value(0)).current;
+  const playMandalaRotateInterpolate = playMandalaRotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg']
+  });
+
+  const handleBellTap = () => {
+    // 1. Tactile feedback
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+
+    // 2. Play chime sound overlay
+    if (bellSoundPlayer) {
+      bellSoundPlayer.seekTo(0);
+      bellSoundPlayer.play();
+    }
+
+    // 3. Increment count & check milestone
+    setBellCount(prev => {
+      const newCount = prev + 1;
+      setTimeout(() => {
+        const isMilestone = newCount === 11 || newCount === 21 || newCount === 54 || newCount % 108 === 0;
+        if (isMilestone) {
+          setMilestoneText(`${newCount} Rings!`);
+          celebrationScale.setValue(0.5);
+          celebrationOpacity.setValue(0);
+          Animated.parallel([
+            Animated.sequence([
+              Animated.timing(celebrationOpacity, {
+                toValue: 1,
+                duration: 200,
+                useNativeDriver: true,
+              }),
+              Animated.delay(1200),
+              Animated.timing(celebrationOpacity, {
+                toValue: 0,
+                duration: 300,
+                useNativeDriver: true,
+              }),
+            ]),
+            Animated.sequence([
+              Animated.spring(celebrationScale, {
+                toValue: 1.3,
+                friction: 6,
+                tension: 40,
+                useNativeDriver: true,
+              }),
+              Animated.timing(celebrationScale, {
+                toValue: 1.8,
+                duration: 600,
+                useNativeDriver: true,
+              })
+            ])
+          ]).start(() => {
+            setMilestoneText(null);
+          });
+        }
+      }, 0);
+      return newCount;
+    });
+
+    // 4. Mandala pulse animation
+    mandalaScale.setValue(1.0);
+    Animated.sequence([
+      Animated.timing(mandalaScale, {
+        toValue: 1.15,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(mandalaScale, {
+        toValue: 1.0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // 5. Bell rotation swing
+    bellRotation.setValue(0);
+    Animated.sequence([
+      Animated.timing(bellRotation, { toValue: -1, duration: 60, useNativeDriver: true }),
+      Animated.timing(bellRotation, { toValue: 1, duration: 90, useNativeDriver: true }),
+      Animated.timing(bellRotation, { toValue: -0.5, duration: 90, useNativeDriver: true }),
+      Animated.timing(bellRotation, { toValue: 0.5, duration: 90, useNativeDriver: true }),
+      Animated.timing(bellRotation, { toValue: 0, duration: 80, useNativeDriver: true })
+    ]).start();
+
+    // 6. Spawn a floater animation
+    const newId = floaterIdRef.current++;
+    const floaterAnim = new Animated.Value(0);
+    const offset = Math.random() * 50 - 25;
+    setFloaters(prev => [...prev, { id: newId, offset, anim: floaterAnim }]);
+
+    Animated.timing(floaterAnim, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: true,
+    }).start(() => {
+      setFloaters(prev => prev.filter(item => item.id !== newId));
+    });
+
+    // 7. Spawn ripple wave animation
+    const rId = rippleIdRef.current++;
+    const rAnim = new Animated.Value(0);
+    setRipples(prev => [...prev, { id: rId, anim: rAnim }]);
+    Animated.timing(rAnim, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: true,
+    }).start(() => {
+      setRipples(prev => prev.filter(r => r.id !== rId));
+    });
+
+    // 8. Animate visualizer bars
+    bellWaves.forEach((anim, idx) => {
+      Animated.sequence([
+        Animated.delay(idx * 25),
+        Animated.timing(anim, {
+          toValue: Math.random() * 0.85 + 0.15,
+          duration: 140,
+          useNativeDriver: true,
+        }),
+        Animated.timing(anim, {
+          toValue: 0.15,
+          duration: 500,
+          useNativeDriver: true,
+        })
+      ]).start();
+    });
+  };
 
   // Expo Audio Setup
   const player = useAudioPlayer(require('../../assets/Sound/bell_sound.mp3'));
   const status = useAudioPlayerStatus(player);
 
-  // Load dynamic data from Drishti Bhajan Supabase
+  // Run visualizer bars loop
+  useEffect(() => {
+    let intervalId: any;
+    if (status.playing) {
+      intervalId = setInterval(() => {
+        setWaveHeights(prev => prev.map(() => Math.floor(Math.random() * 24) + 6));
+      }, 120);
+    } else {
+      setWaveHeights(prev => prev.map(() => 4));
+    }
+    return () => clearInterval(intervalId);
+  }, [status.playing]);
+
+  // Continuous rotation for play button mandala background
+  useEffect(() => {
+    let animation: Animated.CompositeAnimation | null = null;
+    if (status.playing) {
+      playMandalaRotation.setValue(0);
+      animation = Animated.loop(
+        Animated.timing(playMandalaRotation, {
+          toValue: 1,
+          duration: 12000, // 12 seconds for slow, smooth meditative rotation
+          useNativeDriver: true,
+        })
+      );
+      animation.start();
+    } else {
+      playMandalaRotation.stopAnimation();
+    }
+    return () => {
+      if (animation) {
+        animation.stop();
+      }
+    };
+  }, [status.playing]);
+
+  // Reset visible tracks count on tab or query change
+  useEffect(() => {
+    setVisibleTracksCount(10);
+  }, [activeDiscoverTab, selectedDetailCategory, searchQuery, activeCategory]);
+
+  // Load deity categories from main database and chants from bhajan database
   useEffect(() => {
     async function loadData() {
       try {
         setLoading(true);
-        // 1. Fetch Categories
-        const { data: catData, error: catErr } = await bhajanSupabase
-          .from('categories')
-          .select('name')
-          .eq('is_visible', true)
-          .order('name', { ascending: true });
+        // 1. Fetch Deity Categories from main Supabase
+        const { data: catData, error: catErr } = await supabase
+          .from('god_categories')
+          .select('name, icon_url')
+          .order('sort_order', { ascending: true });
 
-        if (catErr) console.error('Error categories:', catErr);
-        if (catData) {
-          setCategories(['All', ...catData.map(c => c.name)]);
+        if (catErr) console.error('Error fetching god categories:', catErr);
+        if (catData && catData.length > 0) {
+          setCategories([{ name: 'All' }, ...catData]);
+        } else {
+          // Fallback static categories
+          setCategories([
+            { name: 'All' },
+            { name: 'Shiv Ji' },
+            { name: 'Ma Laxmi' },
+            { name: 'Ganesha' },
+            { name: 'Hanuman' },
+            { name: 'Durga Ma' },
+            { name: 'Krishna Ji' }
+          ]);
         }
 
         // 2. Fetch Bhajans
@@ -266,7 +331,7 @@ export default function MusicScreen() {
           .eq('is_visible', true)
           .order('created_at', { ascending: false });
 
-        if (bhajanErr) console.error('Error bhajans:', bhajanErr);
+        if (bhajanErr) console.error('Error fetching bhajans:', bhajanErr);
         if (bhajanData && bhajanData.length > 0) {
           const formatted = bhajanData.map((b: any) => {
             const durationSec = b.duration || 200;
@@ -290,7 +355,7 @@ export default function MusicScreen() {
           setTracks(formatted);
         }
       } catch (err) {
-        console.error('Error loading data from bhajan database:', err);
+        console.error('Error loading data from databases:', err);
       } finally {
         setLoading(false);
       }
@@ -300,10 +365,49 @@ export default function MusicScreen() {
 
   const isInitialMount = useRef(true);
 
+  // Handle auto-playing from navigation parameters (like Bhajan of the Day card)
+  useEffect(() => {
+    if (playTrackId && tracks.length > 0) {
+      const idx = tracks.findIndex(t => t.id === playTrackId);
+      if (idx !== -1) {
+        console.log(`[Music Screen] Navigation play parameter detected: track ${playTrackId} at index ${idx}. Auto-playing...`);
+        isInitialMount.current = false;
+        setActiveTrackIndex(idx);
+        setIsPlayerModalVisible(true);
+        setSelectedDetailCategory(null);
+      }
+    }
+  }, [playTrackId, tracks]);
+
+  // Handle search and auto-playing first result from navigation parameters
+  useEffect(() => {
+    if (search && tracks.length > 0) {
+      console.log(`[Music Screen] Navigation search parameter detected: "${search}".`);
+      setSearchQuery(search);
+      setSelectedDetailCategory(null);
+      
+      const query = search.toLowerCase().trim();
+      const idx = tracks.findIndex(t => 
+        (t.title || '').toLowerCase().includes(query) || 
+        (t.category || '').toLowerCase().includes(query) ||
+        (t.description || '').toLowerCase().includes(query)
+      );
+      if (idx !== -1) {
+        console.log(`[Music Screen] Auto-playing first search result at index ${idx}`);
+        isInitialMount.current = false;
+        setActiveTrackIndex(idx);
+        setIsPlayerModalVisible(true);
+      }
+    }
+  }, [search, tracks]);
+
   // Handle Track Source Swap
   useEffect(() => {
     if (activeTrack && activeTrack.url) {
       player.replace(activeTrack.url);
+      player.shouldCorrectPitch = true;
+      player.setPlaybackRate(playbackSpeed);
+      player.volume = playerVolume;
       
       // Auto-advance/autoplay only after initial mount
       if (isInitialMount.current) {
@@ -312,7 +416,7 @@ export default function MusicScreen() {
         player.play();
       }
     }
-  }, [activeTrackIndex, tracks]);
+  }, [activeTrackIndex, tracks, playbackSpeed, playerVolume]);
 
   // Handle track auto-advance when finished
   useEffect(() => {
@@ -321,7 +425,7 @@ export default function MusicScreen() {
     }
   }, [status.didJustFinish]);
 
-  // Split description or generate fallback lyrics dynamically
+  // Generate dynamic lyrics based on description or category fallbacks
   const lyricsArray = useMemo(() => {
     if (!activeTrack) return [];
     if (activeTrack.description && activeTrack.description.length > 5) {
@@ -333,28 +437,44 @@ export default function MusicScreen() {
     }
     // Fallbacks
     const cat = (activeTrack.category || '').toLowerCase();
-    if (cat.includes('shiv')) {
+    if (cat.includes('shiv') || cat.includes('mahadev')) {
       return [
         'Om Namah Shivaya...',
         'Har Har Mahadev...',
-        'Karpoora Gauram Karunavataram...',
-        'Sansara Saram Bhujagendra Haram...'
+        'Karpur Gauram Karunavataram...',
+        'Sansara Saram Bhujagendra Haram...',
+        'Sada Vasantam Hridayaravinde...',
+        'Bhavam Bhavani Sahitam Namami...'
       ];
     }
-    if (cat.includes('krishna') || cat.includes('biha') || cat.includes('radha')) {
+    if (cat.includes('krishna') || cat.includes('radha') || cat.includes('bihari')) {
       return [
         'Hare Krishna Hare Krishna...',
         'Krishna Krishna Hare Hare...',
         'Hare Rama Hare Rama...',
-        'Rama Rama Hare Hare...'
+        'Rama Rama Hare Hare...',
+        'Achyutam Keshavam Krishna Damodaram...',
+        'Rama Narayanam Janakivallabham...'
       ];
     }
-    if (cat.includes('hanuman') || cat.includes('ram')) {
+    if (cat.includes('hanuman') || cat.includes('chalisa') || cat.includes('bajrang')) {
       return [
-        'Mangal Bhavan Amangal Hari...',
-        'Drava hu Su Dasharath Ajir Bihari...',
-        'Jai Pawan Sut Hanuman Ki...',
-        'Jai Jai Jai Bajrangbali...'
+        'Shree Guru Charan Saroj Raj...',
+        'Nij Manu Mukuru Sudhari...',
+        'Barnau Raghuvar Bimal Jasu...',
+        'Jo Dayaku Phal Chari...',
+        'Jai Hanuman Gyan Gun Sagar...',
+        'Jai Kapis Tihun Lok Ujagar...'
+      ];
+    }
+    if (cat.includes('ganesh') || cat.includes('vighna')) {
+      return [
+        'Vakratunda Mahakaya...',
+        'Surya Koti Samaprabha...',
+        'Nirvighnam Kuru Me Deva...',
+        'Sarva Karyeshu Sarvada...',
+        'Jai Ganesh Jai Ganesh Deva...',
+        'Mata Jaki Parvati Pita Mahadeva...'
       ];
     }
     return [
@@ -365,7 +485,7 @@ export default function MusicScreen() {
     ];
   }, [activeTrack]);
 
-  // Sync lyrics line with currentTime progress
+  // Sync lyrics line with playback progress
   useEffect(() => {
     const duration = status.duration || (activeTrack ? activeTrack.durationSec : 0);
     if (duration > 0 && lyricsArray.length > 0) {
@@ -375,7 +495,62 @@ export default function MusicScreen() {
     }
   }, [status.currentTime, status.duration, lyricsArray]);
 
-  // Action helpers
+  const lyricsScrollViewRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    if (lyricsScrollViewRef.current && lyricIndex >= 0) {
+      const lineSize = 30; // height (22) + vertical margins (8)
+      const containerHeight = 150 - 28; // height (150) - vertical padding (28)
+      const centerYOffset = (containerHeight / 2) - (lineSize / 2);
+      const targetScrollY = Math.max(0, (lyricIndex * lineSize) - centerYOffset);
+      lyricsScrollViewRef.current.scrollTo({
+        y: targetScrollY,
+        animated: true,
+      });
+    }
+  }, [lyricIndex]);
+
+  // Matcher helper linking track categories to deity categories
+  const matchTrackToCategory = (track: any, categoryName: string) => {
+    if (categoryName === 'All') return true;
+    const trackCat = (track.category || '').toLowerCase();
+    const activeCat = categoryName.toLowerCase();
+    
+    if (activeCat.includes('shiv') && (trackCat.includes('shiv') || trackCat.includes('mahadev'))) return true;
+    if ((activeCat.includes('laxmi') || activeCat.includes('lakshmi')) && (trackCat.includes('laxmi') || trackCat.includes('lakshmi'))) return true;
+    if (activeCat.includes('ganesh') && (trackCat.includes('ganesh') || trackCat.includes('vighna'))) return true;
+    if (activeCat.includes('hanuman') && (trackCat.includes('hanuman') || trackCat.includes('chalisa') || trackCat.includes('bajrang'))) return true;
+    if (activeCat.includes('durga') && (trackCat.includes('durga') || trackCat.includes('devi') || trackCat.includes('shakti'))) return true;
+    if (activeCat.includes('krishna') && (trackCat.includes('krishna') || trackCat.includes('bihari') || trackCat.includes('radha'))) return true;
+    if (activeCat.includes('venkat') && (trackCat.includes('venkat') || trackCat.includes('balaji'))) return true;
+    
+    return trackCat.includes(activeCat) || activeCat.includes(trackCat);
+  };
+
+  // Filtered tracks under the actively selected category filter
+  const filteredTracks = useMemo(() => {
+    return tracks.filter(t => matchTrackToCategory(t, activeCategory));
+  }, [activeCategory, tracks]);
+
+  // Tracks for the category selected inside detail view (Image 3)
+  const categoryDetailTracks = useMemo(() => {
+    if (!selectedDetailCategory) return [];
+    return tracks.filter(t => matchTrackToCategory(t, selectedDetailCategory));
+  }, [selectedDetailCategory, tracks]);
+
+  // Combined searched tracks list
+  const searchedTracks = useMemo(() => {
+    // Search across all tracks when on the Discover screen, otherwise filter within category details
+    const list = selectedDetailCategory ? categoryDetailTracks : (searchQuery.trim() ? tracks : filteredTracks);
+    if (!searchQuery.trim()) return list;
+    const query = searchQuery.toLowerCase().trim();
+    return list.filter(t => 
+      (t.title || '').toLowerCase().includes(query) ||
+      (t.artist || '').toLowerCase().includes(query) ||
+      (t.category || '').toLowerCase().includes(query)
+    );
+  }, [searchQuery, filteredTracks, categoryDetailTracks, selectedDetailCategory, tracks]);
+
+  // Controller Handlers
   const handlePlayPause = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     if (status.playing) {
@@ -386,18 +561,55 @@ export default function MusicScreen() {
   };
 
   const handleNext = () => {
-    if (tracks.length > 0) {
+    const list = selectedDetailCategory ? categoryDetailTracks : filteredTracks;
+    if (list.length > 0) {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
       setLyricIndex(0);
-      setActiveTrackIndex((prev) => (prev + 1) % tracks.length);
+      const currentFilteredIndex = list.findIndex(t => t.id === activeTrack?.id);
+      let nextFilteredIndex = currentFilteredIndex;
+      if (isShuffleActive && list.length > 1) {
+        while (nextFilteredIndex === currentFilteredIndex) {
+          nextFilteredIndex = Math.floor(Math.random() * list.length);
+        }
+      } else {
+        nextFilteredIndex = (currentFilteredIndex + 1) % list.length;
+      }
+      const originalIndex = tracks.findIndex(t => t.id === list[nextFilteredIndex].id);
+      if (originalIndex !== -1) {
+        setActiveTrackIndex(originalIndex);
+      }
     }
   };
 
   const handlePrev = () => {
-    if (tracks.length > 0) {
+    const list = selectedDetailCategory ? categoryDetailTracks : filteredTracks;
+    if (list.length > 0) {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
       setLyricIndex(0);
-      setActiveTrackIndex((prev) => (prev - 1 + tracks.length) % tracks.length);
+      const currentFilteredIndex = list.findIndex(t => t.id === activeTrack?.id);
+      let prevFilteredIndex = currentFilteredIndex;
+      if (isShuffleActive && list.length > 1) {
+        while (prevFilteredIndex === currentFilteredIndex) {
+          prevFilteredIndex = Math.floor(Math.random() * list.length);
+        }
+      } else {
+        prevFilteredIndex = (currentFilteredIndex - 1 + list.length) % list.length;
+      }
+      const originalIndex = tracks.findIndex(t => t.id === list[prevFilteredIndex].id);
+      if (originalIndex !== -1) {
+        setActiveTrackIndex(originalIndex);
+      }
+    }
+  };
+
+  const handlePlayPlaylist = (playlist: any[]) => {
+    if (playlist.length > 0) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
+      const originalIndex = tracks.findIndex(t => t.id === playlist[0].id);
+      if (originalIndex !== -1) {
+        setActiveTrackIndex(originalIndex);
+      }
+      setIsPlayerModalVisible(true);
     }
   };
 
@@ -407,11 +619,98 @@ export default function MusicScreen() {
     return `${min}:${sec < 10 ? '0' : ''}${sec}`;
   };
 
-  // Filtered tracks
-  const filteredTracks = useMemo(() => {
-    if (activeCategory === 'All') return tracks;
-    return tracks.filter(track => (track.category || '').toLowerCase() === activeCategory.toLowerCase());
-  }, [activeCategory, tracks]);
+  const toggleLike = (id: string) => {
+    setLikedTracks(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const progressPercent = status.duration ? status.currentTime / status.duration : 0;
+  const clampedProgress = Math.max(0, Math.min(1, progressPercent));
+  const currentProgressRatio = isSeeking ? seekProgress : clampedProgress;
+
+  // Touch Seeker Handlers
+  const handleSliderTouch = (event: any) => {
+    const { locationX } = event.nativeEvent;
+    if (sliderWidthRef.current > 0) {
+      let pct = Math.max(0, Math.min(1, locationX / sliderWidthRef.current));
+      setSeekProgress(pct);
+      setIsSeeking(true);
+    }
+  };
+
+  const handleSliderMove = (event: any) => {
+    const { locationX } = event.nativeEvent;
+    if (sliderWidthRef.current > 0) {
+      let pct = Math.max(0, Math.min(1, locationX / sliderWidthRef.current));
+      setSeekProgress(pct);
+    }
+  };
+
+  const handleSliderRelease = () => {
+    if (isSeeking) {
+      const duration = status.duration || (activeTrack ? activeTrack.durationSec : 0) || 0;
+      if (duration > 0) {
+        player.seekTo(seekProgress * duration);
+      }
+      setIsSeeking(false);
+    }
+  };
+
+  const cycleSpeed = () => {
+    let newSpeed = 1.0;
+    if (playbackSpeed === 1.0) newSpeed = 1.25;
+    else if (playbackSpeed === 1.25) newSpeed = 1.5;
+    else if (playbackSpeed === 1.5) newSpeed = 2.0;
+    else if (playbackSpeed === 2.0) newSpeed = 2.5;
+    else if (playbackSpeed === 2.5) newSpeed = 0.8;
+    else newSpeed = 1.0;
+    
+    setPlaybackSpeed(newSpeed);
+    player.shouldCorrectPitch = true;
+    player.setPlaybackRate(newSpeed);
+  };
+
+  const skipBackward10s = () => {
+    const current = status.currentTime || 0;
+    player.seekTo(Math.max(0, current - 10));
+  };
+
+  const skipForward10s = () => {
+    const current = status.currentTime || 0;
+    const duration = status.duration || (activeTrack ? activeTrack.durationSec : 0) || 0;
+    if (duration > 0) {
+      player.seekTo(Math.min(duration, current + 10));
+    }
+  };
+
+  const increaseVolume = () => {
+    const vol = Math.min(1.0, player.volume + 0.1);
+    player.volume = vol;
+    setPlayerVolume(vol);
+  };
+  
+  const decreaseVolume = () => {
+    const vol = Math.max(0.0, player.volume - 0.1);
+    player.volume = vol;
+    setPlayerVolume(vol);
+  };
+
+  // Dynamic Deity Trending lists for horizontal carousel (Reference 1)
+  const trendingDeityCards = useMemo(() => {
+    return categories
+      .filter(c => c.name !== 'All')
+      .map(cat => {
+        let subtitle = 'Chants & Aarti';
+        if (cat.name.includes('Shiv')) subtitle = 'Shiv Tandav & Mantras';
+        else if (cat.name.includes('Krishna')) subtitle = 'Radhe Krishna Dhun';
+        else if (cat.name.includes('Hanuman')) subtitle = 'Hanuman Chalisa';
+        
+        return {
+          name: cat.name,
+          subtitle: subtitle,
+          icon_url: cat.icon_url
+        };
+      });
+  }, [categories]);
 
   if (loading) {
     return (
@@ -419,19 +718,7 @@ export default function MusicScreen() {
         <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
         <ActivityIndicator size="large" color="#ea580c" />
         <Text style={{ marginTop: 12, color: '#64748b', fontFamily: 'Outfit-Medium' }}>
-          Loading divine chants...
-        </Text>
-      </View>
-    );
-  }
-
-  if (tracks.length === 0) {
-    return (
-      <View style={[styles.safeArea, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
-        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-        <Ionicons name="musical-notes-outline" size={48} color="#ea580c" style={{ marginBottom: 12 }} />
-        <Text style={{ color: '#64748b', fontFamily: 'Outfit-Medium', textAlign: 'center' }}>
-          No devotional chants available. Check back soon!
+          Loading Chants...
         </Text>
       </View>
     );
@@ -440,149 +727,756 @@ export default function MusicScreen() {
   return (
     <View style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      <SafeAreaView style={styles.headerContainer}>
-        <View style={styles.headerRow}>
-          <Text style={styles.headerTitle}>{t('Vedic Chants')}</Text>
-          <Text style={styles.headerSubtitle}>{t('Connect with divine sounds')}</Text>
-        </View>
-      </SafeAreaView>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      {/* RENDER DETAILED CATEGORY VIEW (3rd Image) IF CHOSEN */}
+      {selectedDetailCategory ? (
+        <View style={{ flex: 1 }}>
+          {/* Header Cover Banner */}
+          <ImageBackground
+            source={getDeityAvatar(selectedDetailCategory)}
+            style={styles.detailBannerImage}
+            resizeMode="cover"
+          >
+            <LinearGradient
+              colors={['rgba(15, 23, 42, 0.4)', 'rgba(255, 255, 255, 0.98)']}
+              style={StyleSheet.absoluteFillObject}
+            />
+            
+            <SafeAreaView style={styles.detailHeaderTopRow} edges={['top']}>
+              <TouchableOpacity 
+                style={styles.detailBackCircle} 
+                onPress={() => setSelectedDetailCategory(null)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="chevron-back" size={24} color="#0f172a" />
+              </TouchableOpacity>
+            </SafeAreaView>
 
-        {/* Section 1: Premium Audio Player Banner */}
-        <LinearGradient
-          colors={['#ffffff', '#fffaf0']}
-          style={styles.playerWrapper}
-        >
-          {/* Visualizer active state lines */}
-          <View style={styles.visualizerContainer}>
-            <View style={[styles.visualizerBar, status.playing && styles.barPlaying1]} />
-            <View style={[styles.visualizerBar, status.playing && styles.barPlaying2]} />
-            <View style={[styles.visualizerBar, status.playing && styles.barPlaying3]} />
-            <View style={[styles.visualizerBar, status.playing && styles.barPlaying4]} />
-            <View style={[styles.visualizerBar, status.playing && styles.barPlaying3]} />
-            <View style={[styles.visualizerBar, status.playing && styles.barPlaying2]} />
-            <View style={[styles.visualizerBar, status.playing && styles.barPlaying1]} />
-          </View>
-
-          {/* Track titles */}
-          <Text style={styles.playerTrackTitle}>{activeTrack.title}</Text>
-          <Text style={styles.playerTrackArtist}>{activeTrack.artist}</Text>
-
-          {/* Synced Lyrics Line Display Box */}
-          <View style={styles.lyricBox}>
-            <Text style={styles.lyricChantStar}>✦</Text>
-            <Text style={styles.activeLyricText} numberOfLines={2}>
-              {lyricsArray[lyricIndex] || ''}
-            </Text>
-            <Text style={styles.lyricChantStar}>✦</Text>
-          </View>
-
-          {/* Simulated progress slider bar */}
-          <View style={styles.progressBarWrapper}>
-            <Text style={styles.progressTimeLabel}>{formatTime(status.currentTime)}</Text>
-            <View style={styles.progressBarTrack}>
-              <View 
-                style={[
-                  styles.progressBarFill, 
-                  { width: `${((status.currentTime || 0) / (status.duration || activeTrack.durationSec || 1)) * 100}%` }
-                ]} 
-              />
+            {/* Banner Metadata overlays inside glass curves */}
+            <View style={styles.detailBannerInfoContainer}>
+              <Text style={styles.detailCategoryName}>{selectedDetailCategory}</Text>
+              <Text style={styles.detailCategoryMetadata}>
+                {t('Divine Worship')} • {categoryDetailTracks.length} Chants
+              </Text>
             </View>
-            <Text style={styles.progressTimeLabel}>{formatTime(status.duration || activeTrack.durationSec)}</Text>
-          </View>
 
-          {/* Controller Action buttons */}
-          <View style={styles.controllerRow}>
-            <TouchableOpacity style={styles.controlSubBtn} onPress={handlePrev} activeOpacity={0.8}>
-              <Ionicons name="play-back" size={24} color="#ea580c" />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.controlPlayBtn} onPress={handlePlayPause} activeOpacity={0.85}>
-              <Ionicons 
-                name={status.playing ? "pause" : "play"} 
-                size={32} 
-                color="#ffffff" 
-                style={{ marginLeft: status.playing ? 0 : 4 }}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.controlSubBtn} onPress={handleNext} activeOpacity={0.8}>
-              <Ionicons name="play-forward" size={24} color="#ea580c" />
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
-
-        {/* Section 2: Music Category Tabs */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          style={styles.tabsSection}
-          contentContainerStyle={styles.tabsScrollContent}
-        >
-          {categories.map(cat => {
-            const isSelected = activeCategory === cat;
-            return (
-              <TouchableOpacity
-                key={cat}
-                style={[styles.tabItem, isSelected && styles.tabItemActive]}
-                onPress={() => setActiveCategory(cat)}
-                activeOpacity={0.8}
+            {/* Play Floating action button sitting on bottom border */}
+            <TouchableOpacity 
+              style={styles.floatingPlayFab}
+              onPress={() => handlePlayPlaylist(categoryDetailTracks)}
+              activeOpacity={0.9}
+            >
+              <LinearGradient
+                colors={['#f97316', '#f59e0b']}
+                style={styles.playFabGradient}
               >
-                <Text style={[styles.tabText, isSelected && styles.tabTextActive]}>
-                  {t(cat)}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+                <Ionicons name="play" size={26} color="#ffffff" style={{ marginLeft: 3 }} />
+              </LinearGradient>
+            </TouchableOpacity>
+          </ImageBackground>
 
-        {/* Section 3: Devotional Playlist Tracks */}
-        <View style={styles.playlistSection}>
-          <Text style={styles.sectionHeader}>{t('DEVOTIONAL PLAYLIST')}</Text>
+          {/* Songs List of that category */}
+          <View style={styles.detailListBody}>
+            <View style={styles.detailTracksHeader}>
+              <Text style={styles.detailTracksTitle}>{t('Music list')}</Text>
+            </View>
 
-          {filteredTracks.map((track, idx) => {
-            const isCurrent = track.id === activeTrack.id;
-            return (
-              <TouchableOpacity
-                key={track.id}
-                style={[styles.trackListItem, isCurrent && styles.trackListItemActive]}
-                activeOpacity={0.8}
-                onPress={() => {
-                  LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
-                  const originalIdx = tracks.findIndex(t => t.id === track.id);
-                  setActiveTrackIndex(originalIdx);
-                }}
-              >
-                {/* Left play/equalizer bubble */}
-                <View style={[styles.trackItemLeftBubble, isCurrent && styles.activeBubble]}>
-                  <Ionicons 
-                    name={isCurrent && status.playing ? "volume-medium" : "play"} 
-                    size={16} 
-                    color={isCurrent ? "#ffffff" : "#ea580c"} 
-                  />
+            {/* Filter categories tabs inside details */}
+            <View style={styles.detailTabsContainer}>
+              {['Songs', 'Artists', 'Album', 'Playlist'].map((tab: any) => {
+                const isSelected = activeDetailTab === tab;
+                return (
+                  <TouchableOpacity
+                    key={tab}
+                    onPress={() => setActiveDetailTab(tab)}
+                    style={styles.detailTabItem}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.detailTabText, isSelected && styles.detailTabTextActive]}>
+                      {t(tab)}
+                    </Text>
+                    {isSelected && <View style={styles.detailTabUnderline} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+              {searchedTracks.length === 0 ? (
+                <View style={styles.emptyPlaylistContainer}>
+                  <Ionicons name="musical-note-outline" size={32} color="#94a3b8" />
+                  <Text style={styles.emptyPlaylistText}>No chants matches query</Text>
                 </View>
+              ) : (
+                <>
+                  {searchedTracks.slice(0, visibleTracksCount).map((track) => {
+                    const isCurrent = track.id === activeTrack?.id;
+                    return (
+                      <TouchableOpacity
+                        key={track.id}
+                        style={[styles.trackListItem, isCurrent && styles.trackListItemActive]}
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          const originalIdx = tracks.findIndex(t => t.id === track.id);
+                          if (originalIdx !== -1) {
+                            setActiveTrackIndex(originalIdx);
+                          }
+                          setIsPlayerModalVisible(true);
+                        }}
+                      >
+                        <Image 
+                          source={getDeityAvatar(track.category || '', track.thumbnail)} 
+                          style={styles.trackListThumbnail}
+                        />
+                        <View style={styles.trackListInfoCol}>
+                          <Text style={[styles.trackListItemTitle, isCurrent && styles.trackListItemTitleActive]} numberOfLines={1}>
+                            {track.title}
+                          </Text>
+                          <Text style={styles.trackListItemArtist} numberOfLines={1}>
+                            {track.artist}
+                          </Text>
+                        </View>
+                        
+                        {isCurrent && status.playing ? (
+                          <View style={styles.visualizerWaveWrapper}>
+                            <View style={[styles.waveLine, { height: 12 }]} />
+                            <View style={[styles.waveLine, { height: 16 }]} />
+                            <View style={[styles.waveLine, { height: 8 }]} />
+                          </View>
+                        ) : (
+                          <TouchableOpacity style={styles.trackDotsMenu} activeOpacity={0.7}>
+                            <Ionicons name="ellipsis-horizontal" size={20} color="#64748b" />
+                          </TouchableOpacity>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
 
-                {/* Middle track information */}
-                <View style={styles.trackItemInfoCol}>
-                  <Text style={[styles.trackItemTitle, isCurrent && styles.trackItemTitleActive]}>
-                    {track.title}
-                  </Text>
-                  <Text style={styles.trackItemArtist}>
-                    {track.artist}
-                  </Text>
-                </View>
-
-                {/* Right duration */}
-                <Text style={styles.trackItemDuration}>{track.duration}</Text>
-              </TouchableOpacity>
-            );
-          })}
+                  {searchedTracks.length > visibleTracksCount && (
+                    <TouchableOpacity
+                      style={styles.addMoreButton}
+                      activeOpacity={0.8}
+                      onPress={() => {
+                        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                        setVisibleTracksCount(prev => prev + 10);
+                      }}
+                    >
+                      <Text style={styles.addMoreButtonText}>{t('Add More')}</Text>
+                      <Ionicons name="chevron-down" size={16} color="#ea580c" />
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </ScrollView>
+          </View>
         </View>
+      ) : (
+        /* RENDER DISCOVER HOME SCREEN (1st Image) */
+        <View style={{ flex: 1 }}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingTop: 12 }]}>
 
-        {/* Spacer */}
-        <View style={{ height: 100 }} />
-      </ScrollView>
+            {/* Search Input Bar */}
+            <View style={styles.searchBarWrapper}>
+              <Ionicons name="search-outline" size={20} color="#94a3b8" style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchBarInput}
+                placeholder="Search your favorite"
+                placeholderTextColor="#94a3b8"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {searchQuery.trim().length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 4 }} activeOpacity={0.7}>
+                  <Ionicons name="close-circle" size={18} color="#94a3b8" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Music Trending Deity Cards Carousel */}
+            <View style={styles.carouselSection}>
+              <View style={styles.carouselHeaderRow}>
+                <Text style={styles.sectionHeading}>{t('Music Trending')}</Text>
+              </View>
+              
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.carouselScrollContent}
+              >
+                {trendingDeityCards.map((card, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={styles.trendingCard}
+                    activeOpacity={0.9}
+                    onPress={() => setSelectedDetailCategory(card.name)}
+                  >
+                    <Image 
+                      source={getDeityAvatar(card.name, card.icon_url)} 
+                      style={styles.trendingCardBg}
+                    />
+                    <LinearGradient
+                      colors={['transparent', 'rgba(15,23,42,0.85)']}
+                      style={StyleSheet.absoluteFillObject}
+                    />
+                    <View style={styles.trendingCardDetails}>
+                      <Text style={styles.trendingCardTitle} numberOfLines={1}>{card.name}</Text>
+                      <Text style={styles.trendingCardSubtitle} numberOfLines={1}>{card.subtitle}</Text>
+                    </View>
+                    <View style={styles.trendingCardPlayCircle}>
+                      <Ionicons name="play" size={12} color="#ffffff" style={{ marginLeft: 2 }} />
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* Tab list filters */}
+            <View style={styles.tabsSection}>
+              {['Recently', 'Popular', 'Similar', 'Trending'].map((tab: any) => {
+                const isSelected = activeDiscoverTab === tab;
+                return (
+                  <TouchableOpacity
+                    key={tab}
+                    onPress={() => {
+                      setActiveDiscoverTab(tab);
+                      // Custom mapping categories for testing filters
+                      if (tab === 'Recently') setActiveCategory('All');
+                      else if (tab === 'Popular') setActiveCategory('Shiv Ji');
+                      else if (tab === 'Similar') setActiveCategory('Ma Laxmi');
+                      else if (tab === 'Trending') setActiveCategory('Hanuman');
+                    }}
+                    style={styles.tabItem}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.tabText, isSelected && styles.tabTextActive]}>
+                      {t(tab)}
+                    </Text>
+                    {isSelected && <View style={styles.tabUnderline} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Playlist Track rows */}
+            <View style={styles.playlistSection}>
+              {searchedTracks.length === 0 ? (
+                <View style={styles.emptyPlaylistContainer}>
+                  <Ionicons name="musical-note-outline" size={32} color="#94a3b8" />
+                  <Text style={styles.emptyPlaylistText}>No chants found</Text>
+                </View>
+              ) : (
+                <>
+                  {searchedTracks.slice(0, visibleTracksCount).map((track) => {
+                    const isCurrent = track.id === activeTrack?.id;
+                    return (
+                      <TouchableOpacity
+                        key={track.id}
+                        style={[styles.trackListItem, isCurrent && styles.trackListItemActive]}
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          const originalIdx = tracks.findIndex(t => t.id === track.id);
+                          if (originalIdx !== -1) {
+                            setActiveTrackIndex(originalIdx);
+                          }
+                          setIsPlayerModalVisible(true);
+                        }}
+                      >
+                        <Image 
+                          source={getDeityAvatar(track.category || '', track.thumbnail)} 
+                          style={styles.trackListThumbnail}
+                        />
+                        <View style={styles.trackListInfoCol}>
+                          <Text style={[styles.trackListItemTitle, isCurrent && styles.trackListItemTitleActive]} numberOfLines={1}>
+                            {track.title}
+                          </Text>
+                          <Text style={styles.trackListItemArtist} numberOfLines={1}>
+                            {track.artist}
+                          </Text>
+                        </View>
+                        <Text style={styles.trackListItemDuration}>{track.duration}</Text>
+                        
+                        <View style={styles.listPlayBtnGroup}>
+                          {isCurrent && (
+                            <Animated.Image
+                              source={require('../../assets/imp_pngs/pngegg (2).png')}
+                              style={[
+                                styles.mandalaListPlayBg,
+                                {
+                                  transform: [{ rotate: playMandalaRotateInterpolate }]
+                                }
+                              ]}
+                            />
+                          )}
+                          
+                          <TouchableOpacity 
+                            style={[styles.trackListPlayIconContainer, isCurrent && status.playing && styles.trackListPlayIconActive]}
+                            onPress={() => {
+                              const originalIdx = tracks.findIndex(t => t.id === track.id);
+                              if (originalIdx !== -1) {
+                                if (isCurrent) {
+                                  handlePlayPause();
+                                } else {
+                                  setActiveTrackIndex(originalIdx);
+                                }
+                              }
+                            }}
+                          >
+                            <Ionicons 
+                              name={isCurrent && status.playing ? "pause" : "play"} 
+                              size={12} 
+                              color="#ffffff" 
+                              style={!(isCurrent && status.playing) && { marginLeft: 1.5 }}
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+
+                  {searchedTracks.length > visibleTracksCount && (
+                    <TouchableOpacity
+                      style={styles.addMoreButton}
+                      activeOpacity={0.8}
+                      onPress={() => {
+                        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                        setVisibleTracksCount(prev => prev + 10);
+                      }}
+                    >
+                      <Text style={styles.addMoreButtonText}>{t('Add More')}</Text>
+                      <Ionicons name="chevron-down" size={16} color="#ea580c" />
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </View>
+
+            <View style={{ height: 120 }} />
+          </ScrollView>
+        </View>
+      )}
+
+      {/* 5. Persistent Spotify Mini Player Bottom Bar (Light Mode) */}
+      {activeTrack && (
+        <TouchableOpacity 
+          style={styles.miniPlayerBar}
+          activeOpacity={0.9}
+          onPress={() => setIsPlayerModalVisible(true)}
+        >
+          {/* Progress fill stripe at top of bar */}
+          <View style={styles.miniPlayerProgressBackground}>
+            <View style={[styles.miniPlayerProgressFill, { width: `${progressPercent * 100}%` }]} />
+          </View>
+
+          <View style={styles.miniPlayerContent}>
+            <Image 
+              source={getDeityAvatar(activeTrack.category || '', activeTrack.thumbnail)} 
+              style={styles.miniPlayerThumbnail} 
+            />
+            <View style={styles.miniPlayerInfoCol}>
+              <Text style={styles.miniPlayerTitle} numberOfLines={1}>{activeTrack.title}</Text>
+              <Text style={styles.miniPlayerSubtitle} numberOfLines={1}>{activeTrack.artist}</Text>
+            </View>
+            <View style={styles.miniPlayerControlsRow}>
+              <TouchableOpacity onPress={handlePlayPause} style={styles.miniPlayerControlBtn}>
+                <Ionicons name={status.playing ? "pause" : "play"} size={22} color="#ea580c" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleNext} style={styles.miniPlayerControlBtn}>
+                <Ionicons name="play-forward" size={20} color="#ea580c" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {/* 6. Modern Glassmorphic Audio Player Modal Overlay (Reference Image 2) */}
+      {activeTrack && (
+        <Modal
+          visible={isPlayerModalVisible}
+          animationType="slide"
+          presentationStyle="fullScreen"
+          onRequestClose={() => setIsPlayerModalVisible(false)}
+        >
+          <View style={styles.modalBackground}>
+            <Image 
+              source={getDeityAvatar(activeTrack.category || '', activeTrack.thumbnail)} 
+              style={StyleSheet.absoluteFillObject}
+              blurRadius={32}
+            />
+            <View style={styles.overlayShade} />
+
+            <LinearGradient
+              colors={['rgba(255, 250, 240, 0.85)', 'rgba(255, 255, 255, 0.98)']}
+              style={StyleSheet.absoluteFillObject}
+            />
+
+            <SafeAreaView style={styles.modalContainer}>
+              <View style={styles.modalHeader}>
+                <TouchableOpacity 
+                  onPress={() => setIsPlayerModalVisible(false)} 
+                  style={styles.modalTopIconBtn}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="chevron-back" size={24} color="#0f172a" />
+                </TouchableOpacity>
+                <Text style={styles.modalPlayerTitle}>Player</Text>
+                <TouchableOpacity 
+                  onPress={() => toggleLike(activeTrack.id)} 
+                  style={styles.modalTopIconBtn}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons 
+                    name={likedTracks[activeTrack.id] ? "heart" : "heart-outline"} 
+                    size={22} 
+                    color={likedTracks[activeTrack.id] ? "#ef4444" : "#64748b"} 
+                  />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.playerCardFrame}>
+                <ScrollView 
+                  contentContainerStyle={styles.modalScrollContent} 
+                  showsVerticalScrollIndicator={false}
+                >
+                  <View style={styles.sheetHandleLine} />
+
+                  <Text style={styles.listeningToLabel}>Listening to</Text>
+                  
+                  <View style={styles.playerCoverArtWrapper}>
+                    <Image 
+                      source={getDeityAvatar(activeTrack.category || '', activeTrack.thumbnail)} 
+                      style={styles.playerCoverArt} 
+                    />
+                  </View>
+
+                  <Text style={styles.playerTitleText} numberOfLines={1}>{activeTrack.title}</Text>
+                  <Text style={styles.playerArtistText} numberOfLines={1}>{activeTrack.artist}</Text>
+
+                  <View style={styles.sliderSection}>
+                    <View 
+                      style={styles.sliderTrackBackground}
+                      onLayout={(e) => { sliderWidthRef.current = e.nativeEvent.layout.width; }}
+                      onStartShouldSetResponder={() => true}
+                      onMoveShouldSetResponder={() => true}
+                      onResponderGrant={handleSliderTouch}
+                      onResponderMove={handleSliderMove}
+                      onResponderRelease={handleSliderRelease}
+                    >
+                      <View style={[styles.sliderTrackFill, { width: `${currentProgressRatio * 100}%` }]} />
+                      <View style={[styles.sliderThumbIndicator, { left: `${currentProgressRatio * 98}%` }]} />
+                    </View>
+                    <View style={styles.sliderTimestampsRow}>
+                      <Text style={styles.sliderTimeLabel}>
+                        {formatTime(isSeeking ? Math.round(seekProgress * (status.duration || activeTrack.durationSec)) : status.currentTime)}
+                      </Text>
+                      <Text style={styles.sliderTimeLabel}>{formatTime(status.duration || activeTrack.durationSec)}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.mediaButtonsRow}>
+                    <TouchableOpacity 
+                      style={styles.mediaSideBtn} 
+                      onPress={() => setIsShuffleActive(prev => !prev)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="shuffle" size={22} color={isShuffleActive ? "#ea580c" : "#94a3b8"} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.mediaControlBtn} onPress={handlePrev} activeOpacity={0.7}>
+                      <Ionicons name="play-skip-back" size={28} color="#0f172a" />
+                    </TouchableOpacity>
+
+                    <View style={styles.playPauseGroupContainer}>
+                      <Animated.Image
+                        source={require('../../assets/imp_pngs/pngegg (2).png')}
+                        style={[
+                          styles.mandalaPlayBg,
+                          {
+                            transform: [{ rotate: playMandalaRotateInterpolate }]
+                          }
+                        ]}
+                      />
+
+                      <TouchableOpacity 
+                        style={styles.largePlayCircleFab} 
+                        onPress={handlePlayPause}
+                        activeOpacity={0.85}
+                      >
+                        <LinearGradient
+                          colors={['#f97316', '#f59e0b']}
+                          style={styles.largePlayFabGradient}
+                        >
+                          <Ionicons 
+                            name={status.playing ? "pause" : "play"} 
+                            size={28} 
+                            color="#ffffff" 
+                            style={!status.playing && { marginLeft: 3 }}
+                          />
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    </View>
+
+                    <TouchableOpacity style={styles.mediaControlBtn} onPress={handleNext} activeOpacity={0.7}>
+                      <Ionicons name="play-skip-forward" size={28} color="#0f172a" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                      style={styles.mediaSideBtn} 
+                      onPress={() => setShowQueueInPlayer(prev => !prev)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name={showQueueInPlayer ? "list" : "list-outline"} size={22} color={showQueueInPlayer ? "#ea580c" : "#94a3b8"} />
+                    </TouchableOpacity>
+                  </View>
+
+                  {!showQueueInPlayer && (
+                    <>
+                      <View style={styles.visualizerRow}>
+                        {waveHeights.map((h, i) => (
+                          <View key={i} style={[styles.visualizerBar, { height: h }]} />
+                        ))}
+                      </View>
+
+
+                      {/* Temple Bell Section with clean UI card */}
+                      <View style={styles.divineBellCard}>
+                        {/* Dynamic ripple waves in background */}
+                        {ripples.map(r => {
+                          const scale = r.anim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.8, 2.5],
+                          });
+                          const opacity = r.anim.interpolate({
+                            inputRange: [0, 0.8, 1],
+                            outputRange: [0.6, 0.3, 0],
+                          });
+                          return (
+                            <Animated.View
+                              key={r.id}
+                              style={[
+                                styles.rippleCircle,
+                                {
+                                  transform: [{ scale }],
+                                  opacity,
+                                }
+                              ]}
+                            />
+                          );
+                        })}
+
+                        {/* Dynamic counter pill/badge */}
+                        <View style={styles.bellCountBadge}>
+                          <Ionicons name="notifications" size={14} color="#ea580c" />
+                          <Text style={styles.bellCountText}>{bellCount}</Text>
+                        </View>
+
+                        {/* Target/Goal Badge */}
+                        <View style={styles.bellTargetBadge}>
+                          <Text style={styles.bellTargetText}>Target: 108</Text>
+                        </View>
+
+                        {/* Center Bell: glowing pulsating mandala, progress circle, and swinging temple bell */}
+                        <View style={styles.centerBellContainer}>
+                          {/* Dotted progress ring */}
+                          <Svg width="126" height="126" style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
+                            {/* Background dotted circle */}
+                            <Circle
+                              cx="63"
+                              cy="63"
+                              r="58"
+                              stroke="rgba(217, 119, 6, 0.08)"
+                              strokeWidth="2.5"
+                              strokeDasharray="3, 5"
+                              fill="transparent"
+                            />
+                            {/* Active dotted progress circle */}
+                            <Circle
+                              cx="63"
+                              cy="63"
+                              r="58"
+                              stroke="#ea580c"
+                              strokeWidth="3.2"
+                              strokeDasharray="3, 5"
+                              fill="transparent"
+                              strokeDashoffset={2 * Math.PI * 58 * (1 - (bellCount % 108) / 108)}
+                              strokeLinecap="round"
+                            />
+                          </Svg>
+
+                          <Animated.View style={[
+                            styles.haloInnerSolid,
+                            { transform: [{ scale: mandalaScale }] }
+                          ]}>
+                            <Image
+                              source={require('../../assets/imp_pngs/pngegg (2).png')}
+                              style={styles.mandalaBgImage}
+                            />
+                          </Animated.View>
+
+                          <TouchableOpacity
+                            style={styles.divineBellTouchTarget}
+                            onPress={handleBellTap}
+                            activeOpacity={0.9}
+                          >
+                            <Animated.Image
+                              source={require('../../assets/imp_pngs/pngegg (1).png')}
+                              style={[
+                                styles.divineBellImage,
+                                { transform: [{ rotate: bellRotateInterpolate }] }
+                              ]}
+                            />
+                          </TouchableOpacity>
+
+                          {/* Floating "+1" text overlays */}
+                          {floaters.map(f => {
+                            const translateY = f.anim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0, -70],
+                            });
+                            const opacity = f.anim.interpolate({
+                              inputRange: [0, 0.1, 0.8, 1],
+                              outputRange: [0, 1, 1, 0],
+                            });
+                            const scale = f.anim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0.7, 1.3],
+                            });
+                            return (
+                              <Animated.View
+                                key={f.id}
+                                pointerEvents="none"
+                                style={{
+                                  position: 'absolute',
+                                  top: 15,
+                                  alignSelf: 'center',
+                                  transform: [
+                                    { translateY },
+                                    { translateX: f.offset },
+                                    { scale }
+                                  ],
+                                  opacity,
+                                  zIndex: 99,
+                                }}
+                              >
+                                <Text style={{
+                                  color: '#ea580c',
+                                  fontSize: 24,
+                                  fontFamily: 'Outfit-ExtraBold',
+                                  textShadowColor: 'rgba(255, 255, 255, 0.95)',
+                                  textShadowOffset: { width: 1.5, height: 1.5 },
+                                  textShadowRadius: 4,
+                                }}>
+                                  +1
+                                </Text>
+                              </Animated.View>
+                            );
+                          })}
+                        </View>
+
+                        {/* Bell Soundwave Visualizer Row */}
+                        <View style={styles.bellVisualizerRow}>
+                          {bellWaves.map((val, idx) => (
+                            <Animated.View
+                              key={idx}
+                              style={[
+                                styles.bellVisualizerBar,
+                                {
+                                  transform: [{ scaleY: val }]
+                                }
+                              ]}
+                            />
+                          ))}
+                        </View>
+
+                        {/* Milestone Celebration Toast */}
+                        {milestoneText && (
+                          <Animated.View
+                            pointerEvents="none"
+                            style={[
+                              styles.celebrationContainer,
+                              {
+                                opacity: celebrationOpacity,
+                                transform: [{ scale: celebrationScale }]
+                              }
+                            ]}
+                          >
+                            <Ionicons name="sparkles" size={20} color="#ea580c" />
+                            <Text style={styles.celebrationText}>{milestoneText}</Text>
+                            <Ionicons name="flower" size={24} color="#ea580c" style={{ marginTop: 4 }} />
+                          </Animated.View>
+                        )}
+                      </View>
+
+                      <View style={styles.benefitsCard}>
+                        <View style={styles.benefitsHeaderRow}>
+                          <Ionicons name="sparkles" size={14} color="#ea580c" />
+                          <Text style={styles.benefitsHeaderTitle}>BENEFITS & SIGNIFICANCE</Text>
+                        </View>
+                        <Text style={styles.benefitsText}>
+                          {activeTrack.description || 'Helps lower stress, clear negative blockages, and brings deep concentration and peace to the mind and body.'}
+                        </Text>
+                      </View>
+                    </>
+                  )}
+
+                  {showQueueInPlayer && (
+                    <View style={styles.queueBoardInsideCard}>
+                      <Text style={styles.lyricsBoardTitle}>
+                        {t('CHANTED QUEUE')}
+                      </Text>
+                      
+                      <View style={{ maxHeight: 200, width: '100%', marginTop: 8 }}>
+                        <ScrollView 
+                          showsVerticalScrollIndicator={false}
+                          contentContainerStyle={styles.queueScrollViewContent}
+                          nestedScrollEnabled={true}
+                        >
+                          {(selectedDetailCategory ? categoryDetailTracks : filteredTracks).map((track) => {
+                            const isCurrent = track.id === activeTrack.id;
+                            return (
+                              <TouchableOpacity
+                                key={track.id}
+                                style={[styles.playerQueueItem, isCurrent && styles.playerQueueItemActive]}
+                                activeOpacity={0.7}
+                                onPress={() => {
+                                  const originalIdx = tracks.findIndex(t => t.id === track.id);
+                                  if (originalIdx !== -1) {
+                                    setActiveTrackIndex(originalIdx);
+                                  }
+                                }}
+                              >
+                                <Image 
+                                  source={getDeityAvatar(track.category || '', track.thumbnail)} 
+                                  style={styles.playerQueueThumbnail}
+                                />
+                                <View style={styles.playerQueueInfoCol}>
+                                  <Text 
+                                    style={[styles.playerQueueTitle, isCurrent && styles.playerQueueTitleActive]} 
+                                    numberOfLines={1}
+                                  >
+                                    {track.title}
+                                  </Text>
+                                  <Text style={styles.playerQueueArtist} numberOfLines={1}>
+                                    {track.artist}
+                                  </Text>
+                                </View>
+                                {isCurrent && status.playing && (
+                                  <Ionicons name="volume-medium" size={16} color="#ea580c" />
+                                )}
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+                    </View>
+                  )}
+
+                </ScrollView>
+              </View>
+
+            </SafeAreaView>
+
+          </View>
+        </Modal>
+      )}
+
       <DraggableCalendarButton />
     </View>
   );
@@ -591,7 +1485,7 @@ export default function MusicScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#ffffff'
+    backgroundColor: '#ffffff',
   },
   headerContainer: {
     backgroundColor: '#ffffff',
@@ -601,192 +1495,190 @@ const styles = StyleSheet.create({
   headerRow: {
     paddingHorizontal: 20,
     paddingTop: 10,
-    paddingBottom: 14
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontFamily: 'Outfit-ExtraBold',
-    color: '#0f172a',
-    textShadowColor: 'rgba(234, 88, 12, 0.05)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    fontFamily: 'Outfit-Medium',
-    color: '#ea580c',
-    opacity: 0.9,
-    marginTop: 2
-  },
-  scrollContent: {
-    paddingBottom: 20,
-    backgroundColor: '#ffffff'
-  },
-  playerWrapper: {
-    marginHorizontal: 20,
-    marginTop: 16,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    borderColor: '#ffedd5',
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: '#ea580c',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4
-  },
-  visualizerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    height: 30,
-    marginBottom: 20
-  },
-  visualizerBar: {
-    width: 3.5,
-    backgroundColor: '#ea580c',
-    borderRadius: 2,
-    height: 6
-  },
-  barPlaying1: { height: 24, transform: [{ scaleY: 1.2 }] },
-  barPlaying2: { height: 16, transform: [{ scaleY: 0.8 }] },
-  barPlaying3: { height: 20, transform: [{ scaleY: 1.4 }] },
-  barPlaying4: { height: 28, transform: [{ scaleY: 0.5 }] },
-  playerTrackTitle: {
-    fontSize: 20,
-    fontFamily: 'Outfit-Bold',
-    color: '#1e293b',
-    textAlign: 'center'
-  },
-  playerTrackArtist: {
-    fontSize: 12.5,
-    fontFamily: 'Outfit-Medium',
-    color: '#ea580c',
-    textAlign: 'center',
-    marginTop: 4,
-    opacity: 0.95
-  },
-  lyricBox: {
-    backgroundColor: '#fff7ed',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginVertical: 20,
-    width: '100%',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#ffedd5',
+    paddingBottom: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 8
+    alignItems: 'center'
   },
-  activeLyricText: {
-    fontSize: 13.5,
+  menuIconButton: {
+    padding: 4
+  },
+  headerCenteredTitle: {
+    fontSize: 19,
     fontFamily: 'Outfit-Bold',
-    color: '#1e293b',
-    textAlign: 'center',
-    flex: 1,
-    lineHeight: 19
+    color: '#0f172a',
   },
-  lyricChantStar: {
-    color: '#ea580c',
-    fontSize: 12
-  },
-  progressBarWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    gap: 10,
-    marginBottom: 20
-  },
-  progressTimeLabel: {
-    fontSize: 11,
-    fontFamily: 'Outfit-Medium',
-    color: '#64748b',
-    minWidth: 30
-  },
-  progressBarTrack: {
-    flex: 1,
-    height: 4.5,
-    backgroundColor: '#e2e8f0',
-    borderRadius: 3,
+  spotifyAvatarContainer: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
     overflow: 'hidden'
   },
-  progressBarFill: {
+  spotifyAvatar: {
+    width: '100%',
     height: '100%',
-    backgroundColor: '#ea580c',
-    borderRadius: 3
   },
-  controllerRow: {
+  scrollContent: {
+    paddingBottom: 40,
+  },
+  greetingContainer: {
+    marginTop: 20,
+    paddingHorizontal: 20,
+  },
+  greetingText: {
+    fontSize: 24,
+    fontFamily: 'Outfit-ExtraBold',
+    color: '#0f172a',
+  },
+  greetingSubtext: {
+    fontSize: 13,
+    fontFamily: 'Outfit-Medium',
+    color: '#94a3b8',
+    marginTop: 3
+  },
+  searchBarWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 30
-  },
-  controlSubBtn: {
-    padding: 8
-  },
-  controlPlayBtn: {
-    width: 60,
-    height: 60,
-    backgroundColor: '#ea580c',
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#ea580c',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4
-  },
-  tabsSection: {
-    marginHorizontal: 20,
-    marginTop: 24,
-    backgroundColor: '#ffffff',
-    borderWidth: 1.5,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
     borderColor: '#f1f5f9',
     borderRadius: 14,
-    shadowColor: '#64748b',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-    height: 52
+    marginHorizontal: 20,
+    marginTop: 20,
+    paddingHorizontal: 12,
+    height: 50,
   },
-  tabsScrollContent: {
-    flexDirection: 'row',
-    padding: 4,
-    gap: 4
+  searchIcon: {
+    marginRight: 10
   },
-  tabItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 10
-  },
-  tabItemActive: {
-    backgroundColor: '#ea580c'
-  },
-  tabText: {
+  searchBarInput: {
+    flex: 1,
     fontSize: 13,
-    fontFamily: 'Outfit-Bold',
-    color: '#64748b'
+    fontFamily: 'Outfit-Medium',
+    color: '#0f172a',
+    height: '100%'
   },
-  tabTextActive: {
+  filterButton: {
+    padding: 6
+  },
+  carouselSection: {
+    marginTop: 26,
+  },
+  carouselHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 14
+  },
+  sectionHeading: {
+    fontSize: 18,
+    fontFamily: 'Outfit-Bold',
+    color: '#0f172a'
+  },
+  showMoreText: {
+    fontSize: 12.5,
+    fontFamily: 'Outfit-Bold',
+    color: '#94a3b8'
+  },
+  carouselScrollContent: {
+    paddingHorizontal: 20,
+    gap: 16
+  },
+  trendingCard: {
+    width: 140,
+    height: 190,
+    borderRadius: 16,
+    overflow: 'hidden',
+    position: 'relative',
+    shadowColor: '#64748b',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 3
+  },
+  trendingCardBg: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover'
+  },
+  trendingCardDetails: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    right: 12,
+    zIndex: 2
+  },
+  trendingCardTitle: {
+    fontSize: 13.5,
+    fontFamily: 'Outfit-Bold',
     color: '#ffffff'
   },
-  playlistSection: {
-    marginTop: 24,
-    paddingHorizontal: 20
+  trendingCardSubtitle: {
+    fontSize: 10,
+    fontFamily: 'Outfit-Medium',
+    color: '#cbd5e1',
+    marginTop: 2
   },
-  sectionHeader: {
-    fontSize: 11.5,
+  trendingCardPlayCircle: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#ea580c',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 3,
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4
+  },
+  tabsSection: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    marginTop: 26,
+    gap: 22
+  },
+  tabItem: {
+    paddingVertical: 6,
+    position: 'relative'
+  },
+  tabText: {
+    fontSize: 14.5,
     fontFamily: 'Outfit-Bold',
-    color: '#ea580c',
-    letterSpacing: 1.5,
-    marginBottom: 12
+    color: '#94a3b8'
+  },
+  tabTextActive: {
+    color: '#ea580c'
+  },
+  tabUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2.5,
+    borderRadius: 1.5,
+    backgroundColor: '#ea580c'
+  },
+  playlistSection: {
+    marginTop: 20,
+    paddingHorizontal: 20,
+  },
+  emptyPlaylistContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 8
+  },
+  emptyPlaylistText: {
+    fontSize: 13,
+    color: '#94a3b8',
+    fontFamily: 'Outfit-Medium'
   },
   trackListItem: {
     flexDirection: 'row',
@@ -794,52 +1686,793 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 12,
+    marginBottom: 10,
     borderWidth: 1.5,
     borderColor: '#f1f5f9',
-    marginBottom: 10,
     shadowColor: '#64748b',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1
+    shadowRadius: 6,
+    elevation: 1,
   },
   trackListItemActive: {
     borderColor: '#ea580c',
     backgroundColor: '#fff7ed'
   },
-  trackItemLeftBubble: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#fff7ed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12
+  trackListThumbnail: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9'
   },
-  activeBubble: {
-    backgroundColor: '#ea580c'
-  },
-  trackItemInfoCol: {
+  trackListInfoCol: {
     flex: 1,
+    marginLeft: 14,
     justifyContent: 'center'
   },
-  trackItemTitle: {
+  trackListItemTitle: {
     fontSize: 14,
     fontFamily: 'Outfit-Bold',
-    color: '#1e293b'
+    color: '#0f172a'
   },
-  trackItemTitleActive: {
+  trackListItemTitleActive: {
     color: '#ea580c'
   },
-  trackItemArtist: {
+  trackListItemArtist: {
     fontSize: 11.5,
+    fontFamily: 'Outfit-Medium',
+    color: '#64748b',
+    marginTop: 3
+  },
+  trackListItemDuration: {
+    fontSize: 12,
+    fontFamily: 'Outfit-Medium',
+    color: '#64748b',
+    marginRight: 10
+  },
+  trackListPlayIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#ea580c',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 1
+  },
+  trackListPlayIconActive: {
+    backgroundColor: '#ea580c'
+  },
+  trackDotsMenu: {
+    padding: 6
+  },
+  visualizerWaveWrapper: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 3.5,
+    width: 24,
+    height: 24,
+    justifyContent: 'center'
+  },
+  waveLine: {
+    width: 3,
+    backgroundColor: '#ea580c',
+    borderRadius: 1.5
+  },
+  miniPlayerBar: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    right: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#ffedd5',
+    shadowColor: '#64748b',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 4,
+    overflow: 'hidden'
+  },
+  miniPlayerProgressBackground: {
+    height: 2.5,
+    backgroundColor: '#f1f5f9',
+    width: '100%'
+  },
+  miniPlayerProgressFill: {
+    height: '100%',
+    backgroundColor: '#ea580c'
+  },
+  miniPlayerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  miniPlayerThumbnail: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9'
+  },
+  miniPlayerInfoCol: {
+    flex: 1,
+    marginLeft: 12,
+    justifyContent: 'center'
+  },
+  miniPlayerTitle: {
+    fontSize: 13.5,
+    fontFamily: 'Outfit-Bold',
+    color: '#0f172a'
+  },
+  miniPlayerSubtitle: {
+    fontSize: 10.5,
     fontFamily: 'Outfit-Medium',
     color: '#64748b',
     marginTop: 2
   },
-  trackItemDuration: {
-    fontSize: 12,
+  miniPlayerControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16
+  },
+  miniPlayerControlBtn: {
+    padding: 4
+  },
+  modalBackground: {
+    flex: 1,
+    backgroundColor: '#fffcf8'
+  },
+  overlayShade: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.45)'
+  },
+  modalContainer: {
+    flex: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12
+  },
+  modalTopIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#64748b',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2
+  },
+  modalPlayerTitle: {
+    fontSize: 16,
+    fontFamily: 'Outfit-Bold',
+    color: '#0f172a'
+  },
+  modalScrollContent: {
+    width: '100%',
+    paddingBottom: 85,
+    alignItems: 'center'
+  },
+  playerCardFrame: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 36,
+    borderTopRightRadius: 36,
+    paddingTop: 16,
+    paddingHorizontal: 24,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 10,
+    marginTop: 16,
+    overflow: 'hidden'
+  },
+  listeningToLabel: {
+    fontSize: 11,
+    fontFamily: 'Outfit-Bold',
+    color: '#94a3b8',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: 8
+  },
+  playerCoverArtWrapper: {
+    width: width * 0.46,
+    height: width * 0.46,
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+    marginBottom: 10,
+    backgroundColor: '#f1f5f9'
+  },
+  playerCoverArt: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover'
+  },
+  playerTitleText: {
+    fontSize: 20,
+    fontFamily: 'Outfit-Bold',
+    color: '#0f172a',
+    textAlign: 'center'
+  },
+  playerArtistText: {
+    fontSize: 13,
+    fontFamily: 'Outfit-Medium',
+    color: '#64748b',
+    textAlign: 'center',
+    marginTop: 6
+  },
+  sliderSection: {
+    width: '100%',
+    marginTop: 12,
+    paddingHorizontal: 4
+  },
+  sliderTrackBackground: {
+    height: 4.5,
+    backgroundColor: '#cbd5e1',
+    borderRadius: 3,
+    width: '100%',
+    position: 'relative'
+  },
+  sliderTrackFill: {
+    height: '100%',
+    backgroundColor: '#ea580c',
+    borderRadius: 3
+  },
+  sliderThumbIndicator: {
+    position: 'absolute',
+    top: -5,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#ffffff',
+    borderWidth: 3,
+    borderColor: '#ea580c',
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 1
+  },
+  sliderTimestampsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10
+  },
+  sliderTimeLabel: {
+    fontSize: 11,
     fontFamily: 'Outfit-Medium',
     color: '#64748b'
-  }
+  },
+  mediaButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: 14,
+    paddingHorizontal: 6
+  },
+  mediaSideBtn: {
+    padding: 8
+  },
+  mediaControlBtn: {
+    padding: 8
+  },
+  playPauseGroupContainer: {
+    width: 90,
+    height: 90,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  mandalaPlayBg: {
+    position: 'absolute',
+    width: 90,
+    height: 90,
+    resizeMode: 'contain',
+    opacity: 0.85,
+  },
+  largePlayCircleFab: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    overflow: 'hidden',
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4
+  },
+  largePlayFabGradient: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  lyricsBoardContainer: {
+    width: width * 0.88,
+    height: 150,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(234, 88, 12, 0.08)',
+    borderRadius: 24,
+    marginTop: 20,
+    padding: 14,
+    overflow: 'hidden',
+    shadowColor: '#64748b',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2
+  },
+  lyricsBoardTitle: {
+    fontSize: 10,
+    fontFamily: 'Outfit-Bold',
+    color: '#ea580c',
+    letterSpacing: 1.5,
+    marginBottom: 6,
+    textAlign: 'center'
+  },
+  lyricsScrollViewContent: {
+    paddingVertical: 10,
+    alignItems: 'center'
+  },
+  lyricLineText: {
+    fontSize: 13.5,
+    fontFamily: 'Outfit-Medium',
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginVertical: 4,
+    width: '90%'
+  },
+  lyricLineTextActive: {
+    fontSize: 15,
+    fontFamily: 'Outfit-Bold',
+    color: '#ea580c',
+    textShadowColor: 'rgba(234, 88, 12, 0.25)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6
+  },
+
+  /* CATEGORY DETAIL STYLES (Reference 3) */
+  detailBannerImage: {
+    width: '100%',
+    height: height * 0.36,
+    justifyContent: 'space-between',
+    position: 'relative'
+  },
+  detailHeaderTopRow: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+  },
+  detailBackCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2
+  },
+  detailBannerInfoContainer: {
+    paddingHorizontal: 24,
+    paddingBottom: 24
+  },
+  detailCategoryName: {
+    fontSize: 26,
+    fontFamily: 'Outfit-ExtraBold',
+    color: '#0f172a',
+    textShadowColor: 'rgba(255, 255, 255, 0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4
+  },
+  detailCategoryMetadata: {
+    fontSize: 13.5,
+    fontFamily: 'Outfit-Medium',
+    color: '#475569',
+    marginTop: 4
+  },
+  floatingPlayFab: {
+    position: 'absolute',
+    bottom: -28,
+    right: 28,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    overflow: 'hidden',
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
+    zIndex: 10
+  },
+  playFabGradient: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  detailListBody: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    marginTop: -20,
+    paddingTop: 24,
+    paddingHorizontal: 20,
+    shadowColor: '#64748b',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 4
+  },
+  detailTracksHeader: {
+    marginBottom: 12
+  },
+  detailTracksTitle: {
+    fontSize: 18,
+    fontFamily: 'Outfit-Bold',
+    color: '#0f172a'
+  },
+  detailTabsContainer: {
+    flexDirection: 'row',
+    gap: 20,
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    paddingBottom: 4
+  },
+  detailTabItem: {
+    paddingVertical: 6,
+    position: 'relative'
+  },
+  detailTabText: {
+    fontSize: 14,
+    fontFamily: 'Outfit-Bold',
+    color: '#94a3b8'
+  },
+  detailTabTextActive: {
+    color: '#ea580c'
+  },
+  detailTabUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2.5,
+    borderRadius: 1.5,
+    backgroundColor: '#ea580c'
+  },
+  addMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#ffedd5',
+    borderRadius: 12,
+    paddingVertical: 12,
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 8,
+    gap: 6,
+  },
+  addMoreButtonText: {
+    fontSize: 14,
+    fontFamily: 'Outfit-Bold',
+    color: '#ea580c',
+  },
+  sheetHandleLine: {
+    width: 36,
+    height: 4.5,
+    borderRadius: 2.25,
+    backgroundColor: '#cbd5e1',
+    alignSelf: 'center',
+    marginBottom: 10
+  },
+  queueScrollViewContent: {
+    paddingVertical: 4,
+  },
+  playerQueueItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 4,
+    gap: 10,
+  },
+  playerQueueItemActive: {
+    backgroundColor: '#fff7ed',
+  },
+  playerQueueThumbnail: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+  },
+  playerQueueInfoCol: {
+    flex: 1,
+  },
+  playerQueueTitle: {
+    fontSize: 13,
+    fontFamily: 'Outfit-Bold',
+    color: '#0f172a',
+  },
+  playerQueueTitleActive: {
+    color: '#ea580c',
+  },
+  playerQueueArtist: {
+    fontSize: 11,
+    fontFamily: 'Outfit-Medium',
+    color: '#64748b',
+    marginTop: 1,
+  },
+  queueBoardInsideCard: {
+    width: '100%',
+    marginTop: 24,
+    padding: 12,
+    backgroundColor: '#f8fafc',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#f1f5f9'
+  },
+  visualizerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 40,
+    gap: 4,
+    marginTop: 10,
+    marginBottom: 6,
+    width: '100%',
+  },
+  visualizerBar: {
+    width: 4,
+    borderRadius: 2,
+    backgroundColor: '#ea580c',
+  },
+  speedRowAboveCard: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    width: '100%',
+    paddingHorizontal: 4,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  speedPillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff7ed',
+    borderWidth: 1.2,
+    borderColor: '#ffedd5',
+    borderRadius: 20,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    gap: 4,
+  },
+  speedPillText: {
+    fontSize: 11,
+    fontFamily: 'Outfit-Bold',
+    color: '#ea580c',
+  },
+  divineBellCard: {
+    width: '100%',
+    height: 154,
+    borderRadius: 24,
+    marginTop: 10,
+    marginBottom: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#ffedd5',
+    position: 'relative',
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
+    justifyContent: 'center',
+  },
+  rippleCircle: {
+    position: 'absolute',
+    alignSelf: 'center',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 1.5,
+    borderColor: 'rgba(234, 88, 12, 0.25)',
+    zIndex: 1,
+  },
+  bellCountBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff7ed',
+    borderWidth: 1.2,
+    borderColor: '#ffedd5',
+    borderRadius: 20,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    gap: 4,
+    zIndex: 20,
+  },
+  bellCountText: {
+    fontSize: 12,
+    fontFamily: 'Outfit-Bold',
+    color: '#ea580c',
+  },
+  bellTargetBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 16,
+    backgroundColor: '#fffdfa',
+    borderWidth: 1.2,
+    borderColor: '#fef3c7',
+    borderRadius: 20,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    zIndex: 20,
+  },
+  bellTargetText: {
+    fontSize: 11,
+    fontFamily: 'Outfit-Bold',
+    color: '#94a3b8',
+  },
+  centerBellContainer: {
+    position: 'absolute',
+    left: '50%',
+    marginLeft: -60,
+    top: 12,
+    width: 120,
+    height: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  haloInnerSolid: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: 'rgba(255,253,248,0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#f59e0b',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+    position: 'absolute',
+  },
+  mandalaBgImage: {
+    width: '100%',
+    height: '100%',
+    opacity: 0.15,
+    resizeMode: 'contain',
+  },
+  divineBellTouchTarget: {
+    width: 120,
+    height: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 15,
+  },
+  divineBellImage: {
+    width: 105,
+    height: 105,
+    resizeMode: 'contain',
+  },
+  bellVisualizerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 4,
+    position: 'absolute',
+    bottom: 10,
+    width: '100%',
+    height: 24,
+    zIndex: 5,
+  },
+  bellVisualizerBar: {
+    width: 3,
+    height: 16,
+    backgroundColor: 'rgba(245, 158, 11, 0.4)',
+    borderRadius: 1.5,
+  },
+  celebrationContainer: {
+    position: 'absolute',
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 253, 248, 0.98)',
+    borderWidth: 1.5,
+    borderColor: '#fbd38d',
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+    zIndex: 100,
+    top: '12%',
+  },
+  celebrationText: {
+    fontSize: 14,
+    fontFamily: 'Outfit-Bold',
+    color: '#ea580c',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  benefitsCard: {
+    width: '100%',
+    backgroundColor: '#fffbeb',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#fef3c7',
+    marginTop: 8,
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  benefitsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  benefitsHeaderTitle: {
+    fontSize: 12,
+    fontFamily: 'Outfit-Bold',
+    color: '#ea580c',
+    letterSpacing: 1,
+  },
+  benefitsText: {
+    fontSize: 13,
+    fontFamily: 'Outfit-Medium',
+    color: '#78350f',
+    lineHeight: 18,
+  },
+  listPlayBtnGroup: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  mandalaListPlayBg: {
+    position: 'absolute',
+    width: 44,
+    height: 44,
+    resizeMode: 'contain',
+    opacity: 0.85,
+  },
 });

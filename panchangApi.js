@@ -190,6 +190,54 @@ const getPanchangFallback = (year, month, day, lat, lon) => {
     };
 };
 
+const getChoghadiyaFallback = (year, month, day) => {
+    // Generate static but realistic Choghadiya divisions from Sunrise 05:28:00 to Sunset 19:11:00
+    const dayStartSec = 5 * 3600 + 28 * 60; // 05:28:00
+    const dayEndSec = 19 * 3600 + 11 * 60;  // 19:11:00
+    const dayDuration = dayEndSec - dayStartSec;
+    const daySlotDuration = dayDuration / 8;
+
+    const nightDuration = (24 * 3600 - dayEndSec) + dayStartSec;
+    const nightSlotDuration = nightDuration / 8;
+
+    const formatSecToTime = (totalSec) => {
+        const sec = Math.floor(totalSec % 60);
+        const min = Math.floor((totalSec / 60) % 60);
+        const hr = Math.floor(totalSec / 3600);
+        return `${String(hr).padStart(2, '0')}:${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    };
+
+    const dayMuhurtas = ['Shubh', 'Rog', 'Udveg', 'Char', 'Labh', 'Amrit', 'Kaal', 'Shubh'];
+    const nightMuhurtas = ['Amrit', 'Char', 'Rog', 'Kaal', 'Labh', 'Udveg', 'Shubh', 'Amrit'];
+
+    const daySlots = [];
+    for (let i = 0; i < 8; i++) {
+        const startSec = dayStartSec + i * daySlotDuration;
+        const endSec = startSec + daySlotDuration;
+        daySlots.push({
+            time: `${formatSecToTime(startSec)} - ${formatSecToTime(endSec)}`,
+            muhurta: dayMuhurtas[i]
+        });
+    }
+
+    const nightSlots = [];
+    for (let i = 0; i < 8; i++) {
+        const startSec = dayEndSec + i * nightSlotDuration;
+        const endSec = startSec + nightSlotDuration;
+        nightSlots.push({
+            time: `${formatSecToTime(startSec)} - ${formatSecToTime(endSec)}`,
+            muhurta: nightMuhurtas[i]
+        });
+    }
+
+    return {
+        chaughadiya: {
+            day: daySlots,
+            night: nightSlots
+        }
+    };
+};
+
 /**
  * Maps the rich AstrologyAPI advanced panchang details into the client's expected format.
  */
@@ -295,8 +343,9 @@ const handlePanchangRequest = async (req, res) => {
     try {
         console.log(`[PanchangAPI] Request for ${referenceDateStr} at Lat: ${lat}, Lon: ${lon}`);
 
-        const latFixed = Number(lat.toFixed(4));
-        const lonFixed = Number(lon.toFixed(4));
+        // Round to 1 decimal place (~11km accuracy) to group users in the same region and maximize cache hits
+        const latFixed = Number(lat.toFixed(1));
+        const lonFixed = Number(lon.toFixed(1));
         const tzoneFixed = Number(tzone.toFixed(1));
 
         // 1. Try DB cache first
@@ -384,7 +433,147 @@ const handlePanchangRequest = async (req, res) => {
     }
 }
 
+const handleChoghadiyaRequest = async (req, res) => {
+    const now = new Date();
+    const day = Number(req.query.day || req.body?.day || now.getDate());
+    const month = Number(req.query.month || req.body?.month || (now.getMonth() + 1));
+    const year = Number(req.query.year || req.body?.year || now.getFullYear());
+    
+    const lat = Number(req.query.lat || req.body?.lat || 28.6139);
+    const lon = Number(req.query.lon || req.body?.lon || 77.2090);
+    const tzone = Number(req.query.tzone || req.body?.tzone || 5.5);
+
+    const referenceDateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    // Round to 1 decimal place (~11km accuracy) to group users in the same region and maximize cache hits
+    const latFixed = Number(lat.toFixed(1));
+    const lonFixed = Number(lon.toFixed(1));
+    const tzoneFixed = Number(tzone.toFixed(1));
+
+    try {
+        // 1. Try DB cache first
+        if (supabase) {
+            try {
+                const { data: existing } = await supabase
+                    .from('choghadiyas')
+                    .select('*')
+                    .eq('reference_date', referenceDateStr)
+                    .eq('lat', latFixed)
+                    .eq('lon', lonFixed)
+                    .eq('tzone', tzoneFixed)
+                    .maybeSingle();
+
+                if (existing && existing.data) {
+                    console.log(`[PanchangAPI] DB cache hit for Choghadiya date ${referenceDateStr}`);
+                    return res.json({ success: true, data: existing.data });
+                }
+            } catch (dbErr) {
+                console.error('[PanchangAPI] DB Cache read error for Choghadiya:', dbErr.message);
+            }
+        }
+
+        // 2. Fetch from FreeAstrologyAPI /choghadiya-timings
+        const url = 'https://json.freeastrologyapi.com/choghadiya-timings';
+        const apiKey = 'lroMrRAr4a9O8x3MP7cek3yR9kVvOuVb8wr35hVy';
+
+        const headers = {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey
+        };
+
+        const payload = {
+            year,
+            month,
+            date: day,
+            hours: 12,
+            minutes: 0,
+            seconds: 0,
+            latitude: latFixed,
+            longitude: lonFixed,
+            timezone: tzoneFixed,
+            observation_point: 'topocentric'
+        };
+
+        console.log(`[PanchangAPI] Calling FreeAstrologyAPI: ${url}`);
+        const apiResponse = await axios.post(url, payload, {
+            headers,
+            timeout: 15000
+        });
+
+        const apiData = apiResponse.data;
+        if (!apiData || !apiData.output) {
+            throw new Error("Invalid response format: missing output");
+        }
+
+        const output = typeof apiData.output === 'string' ? JSON.parse(apiData.output) : apiData.output;
+        
+        const formatTimePart = (dateTimeStr) => {
+            if (!dateTimeStr) return '00:00:00';
+            const parts = dateTimeStr.split(' ');
+            const timePart = parts[1] || '00:00:00';
+            return timePart.split('.')[0]; // remove milliseconds
+        };
+
+        const daySlots = [];
+        for (let i = 1; i <= 8; i++) {
+            const slot = output[String(i)];
+            if (slot) {
+                daySlots.push({
+                    time: `${formatTimePart(slot.starts_at)} - ${formatTimePart(slot.ends_at)}`,
+                    muhurta: slot.name
+                });
+            }
+        }
+
+        const nightSlots = [];
+        for (let i = 9; i <= 16; i++) {
+            const slot = output[String(i)];
+            if (slot) {
+                nightSlots.push({
+                    time: `${formatTimePart(slot.starts_at)} - ${formatTimePart(slot.ends_at)}`,
+                    muhurta: slot.name
+                });
+            }
+        }
+
+        const resultData = {
+            chaughadiya: {
+                day: daySlots,
+                night: nightSlots
+            }
+        };
+
+        // 3. Save to DB cache
+        if (supabase) {
+            try {
+                await supabase
+                    .from('choghadiyas')
+                    .upsert({
+                        reference_date: referenceDateStr,
+                        lat: latFixed,
+                        lon: lonFixed,
+                        tzone: tzoneFixed,
+                        data: resultData
+                    }, { onConflict: 'reference_date,lat,lon,tzone' });
+                console.log(`[PanchangAPI] DB cache updated for Choghadiya date ${referenceDateStr}`);
+            } catch (saveError) {
+                console.error('[PanchangAPI] DB Cache save error for Choghadiya:', saveError.message);
+            }
+        }
+
+        return res.json({ success: true, data: resultData });
+
+    } catch (error) {
+        console.error('[PanchangAPI] Choghadiya API failed:', error.message);
+        console.warn(`[PanchangAPI] Serving dynamic calculated fallback for Choghadiya date: ${referenceDateStr}`);
+        const fallback = getChoghadiyaFallback(year, month, day);
+        return res.json({ success: true, data: fallback });
+    }
+};
+
 router.get('/astrology/panchang', handlePanchangRequest);
 router.post('/astrology/panchang', handlePanchangRequest);
+
+router.get('/astrology/choghadiya', handleChoghadiyaRequest);
+router.post('/astrology/choghadiya', handleChoghadiyaRequest);
 
 module.exports = router;

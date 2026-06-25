@@ -42,6 +42,7 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
   const [profileEmail, setProfileEmail] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [walletBalance, setWalletBalance] = useState<number>(50);
+  const [isPundit, setIsPundit] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -70,11 +71,21 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
               await supabase.from('user_wallets').upsert({ user_id: parsed.id, balance: 50 });
               setWalletBalance(50);
             }
+
+            // Check if user is a Pundit
+            const { data: punditData } = await supabase
+              .from('website_store_pundits')
+              .select('id')
+              .eq('user_id', parsed.id)
+              .maybeSingle();
+
+            setIsPundit(!!punditData);
           } else {
             setProfileName('Guest');
             setProfileEmail('');
             setAvatarUrl(null);
             setWalletBalance(50);
+            setIsPundit(false);
           }
         } catch (err) {
           console.error('Error loading session in SettingsDrawer:', err);
@@ -186,35 +197,46 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
 
           <View style={styles.itemsContainer}>
             <Text style={styles.sectionTitle}>{t('Account Settings')}</Text>
-            {SETTINGS_ITEMS.map((item, index) => (
-              <TouchableOpacity 
-                key={index}
-                style={styles.item}
-                activeOpacity={0.7}
-                onPress={() => {
-                  onClose();
-                  if (item.label === 'My Wallet') {
-                    router.push('/wallet');
-                  } else {
-                    router.push({
-                      pathname: '/settings_detail',
-                      params: { type: item.label.toLowerCase().replace(/\s+/g, '_') }
-                    });
-                  }
-                }}
-              >
-                <View style={[styles.iconBox, item.color ? { backgroundColor: item.color + '15' } : { backgroundColor: '#f1f5f9' }]}>
-                  <Ionicons name={item.icon as any} size={22} color={item.color || '#6366f1'} />
-                </View>
-                <View style={styles.itemBody}>
-                  <Text style={[styles.itemLabel, item.color ? { color: item.color } : { color: '#1e293b' }]}>
-                    {t(item.label)}
-                  </Text>
-                  <Text style={styles.itemDesc}>{t(item.desc)}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color="#94a3b8" />
-              </TouchableOpacity>
-            ))}
+            {(() => {
+              const menuItems = [...SETTINGS_ITEMS];
+              if (isPundit) {
+                menuItems.splice(3, 0, {
+                  icon: 'calendar-outline',
+                  label: 'Pundit Portal',
+                  desc: 'Accept bookings and update profile',
+                  color: '#ea580c'
+                });
+              }
+              return menuItems.map((item, index) => (
+                <TouchableOpacity 
+                  key={index}
+                  style={styles.item}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    onClose();
+                    if (item.label === 'My Wallet') {
+                      router.push('/wallet');
+                    } else {
+                      router.push({
+                        pathname: '/settings_detail',
+                        params: { type: item.label.toLowerCase().replace(/\s+/g, '_') }
+                      });
+                    }
+                  }}
+                >
+                  <View style={[styles.iconBox, item.color ? { backgroundColor: item.color + '15' } : { backgroundColor: '#f1f5f9' }]}>
+                    <Ionicons name={item.icon as any} size={22} color={item.color || '#6366f1'} />
+                  </View>
+                  <View style={styles.itemBody}>
+                    <Text style={[styles.itemLabel, item.color ? { color: item.color } : { color: '#1e293b' }]}>
+                      {t(item.label)}
+                    </Text>
+                    <Text style={styles.itemDesc}>{t(item.desc)}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#94a3b8" />
+                </TouchableOpacity>
+              ));
+            })()}
           </View>
         </ScrollView>
 

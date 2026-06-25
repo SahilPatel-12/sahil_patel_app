@@ -26,7 +26,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="god"
         options={{
-          title: 'God',
+          title: 'Darshan',
         }}
       />
       <Tabs.Screen

@@ -1,5 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const axios = require('axios');
+const admin = require('firebase-admin');
 
 // Initialize Supabase Client for the Dispatcher
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
@@ -12,6 +13,94 @@ if (!supabaseUrl || !supabaseAnonKey) {
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 let isProcessing = false;
+let firebaseApp = null;
+
+/**
+ * Initializes/resolves the Firebase Admin App instance dynamically using decrypted credentials.
+ */
+function getFirebaseAdminApp(serviceAccount) {
+  if (firebaseApp) return firebaseApp;
+
+  // Check if there is already a default app initialized
+  const existingApp = admin.getApps().find(app => app.name === '[DEFAULT]');
+  if (existingApp) {
+    firebaseApp = existingApp;
+    return firebaseApp;
+  }
+
+  try {
+    firebaseApp = admin.initializeApp({
+      credential: admin.cert(serviceAccount)
+    });
+    console.log('🔥 [Notification Dispatcher] Firebase Admin SDK initialized successfully.');
+    return firebaseApp;
+  } catch (err) {
+    console.error('❌ [Notification Dispatcher] Failed to initialize Firebase Admin:', err.message);
+    throw err;
+  }
+}
+
+/**
+ * Fetches and decrypts FCM Service Account JSON configuration from Supabase.
+ */
+async function resolveFcmServiceAccount() {
+  const encryptionKey = process.env.EXPO_PUBLIC_ENCRYPTION_KEY || process.env.VITE_ENCRYPTION_KEY;
+  if (!encryptionKey) {
+    throw new Error('Encryption key is missing in environment variables.');
+  }
+  if (encryptionKey.length < 16) {
+    throw new Error('Encryption key must be at least 16 characters long.');
+  }
+  try {
+    const { data: configs, error: configsErr } = await supabase.rpc('get_api_configs');
+
+    if (configsErr) {
+      console.error('❌ [Notification Dispatcher] Error querying api_configs for FCM:', configsErr.message);
+      return null;
+    }
+
+    const config = configs ? configs.find(c => c.provider === 'firebase_fcm') : null;
+
+    if (!config || !config.is_active) {
+      console.warn('⚠️ [Notification Dispatcher] firebase_fcm configuration is inactive or not found in database.');
+      return null;
+    }
+
+    const { data: decryptedKey, error: decryptErr } = await supabase.rpc('get_decrypted_api_key', {
+      p_provider: 'firebase_fcm',
+      p_encryption_key: encryptionKey
+    });
+
+    if (decryptErr) {
+      console.error('❌ [Notification Dispatcher] Failed to decrypt FCM credentials JSON:', decryptErr.message);
+      return null;
+    }
+
+    if (!decryptedKey) {
+      console.warn('⚠️ [Notification Dispatcher] Decrypted FCM key is empty.');
+      return null;
+    }
+
+    const parsedCredentials = JSON.parse(decryptedKey);
+    return parsedCredentials;
+  } catch (err) {
+    console.error('❌ [Notification Dispatcher] Error resolving FCM Service Account:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Helper to add 1 day to YYYY-MM-DD string avoiding local timezone shifts.
+ */
+function addOneDay(dateStr) {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const d = new Date(year, month - 1, day);
+  d.setDate(d.getDate() + 1);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
 
 /**
  * Periodically polls the push_notifications table and dispatches pending notifications.
@@ -68,7 +157,7 @@ async function checkAndDispatchNotifications() {
     // 4. Load all registered user push tokens
     const { data: tokensData, error: tokensErr } = await supabase
       .from('user_push_tokens')
-      .select('push_token, user_id');
+      .select('push_token, user_id, platform');
 
     if (tokensErr) {
       console.error('❌ [Notification Dispatcher] Error loading registered push tokens:', tokensErr.message);
@@ -76,7 +165,26 @@ async function checkAndDispatchNotifications() {
       return;
     }
 
-    const uniqueTokens = [...new Set((tokensData || []).map(t => t.push_token))];
+    const uniqueTokens = tokensData || [];
+    
+    // De-duplicate by push_token string
+    const seenTokens = new Set();
+    const deduplicatedTokens = [];
+    for (const t of uniqueTokens) {
+      if (!seenTokens.has(t.push_token)) {
+        seenTokens.add(t.push_token);
+        deduplicatedTokens.push(t);
+      }
+    }
+
+    // Split tokens by push mechanism
+    const expoTokens = deduplicatedTokens
+      .filter(t => t.push_token.startsWith('ExponentPushToken'))
+      .map(t => t.push_token);
+
+    const fcmTokens = deduplicatedTokens
+      .filter(t => !t.push_token.startsWith('ExponentPushToken') && t.platform === 'android')
+      .map(t => t.push_token);
 
     for (const noti of notificationsToDispatch) {
       console.log(`📬 [Notification Dispatcher] Dispatching notification ID ${noti.id}: "${noti.title}"`);
@@ -120,7 +228,7 @@ async function checkAndDispatchNotifications() {
                 .insert({
                   user_id: user.id,
                   amount: noti.coin_amount,
-                  type: 'admin_adjustment', // Matches allowed standard types
+                  type: 'admin_adjustment',
                   created_at: new Date().toISOString()
                 });
             }
@@ -131,40 +239,149 @@ async function checkAndDispatchNotifications() {
         }
       }
 
-      // 6. Send push notifications to Expo Push API
-      if (uniqueTokens.length > 0) {
-        // Build message payload for each token
-        const messages = uniqueTokens.map(token => ({
-          to: token,
-          sound: 'default',
-          title: noti.title,
-          body: noti.body,
-          data: {
-            id: noti.id,
-            notification_type: noti.notification_type,
-            target_vrat_id: noti.target_vrat_id,
-            coin_amount: noti.coin_amount
-          },
-          // Format image attachment if provided
-          attachments: noti.image_url ? [
-            {
-              identifier: 'image',
-              url: noti.image_url,
-              type: 'image/jpeg'
+      // 6. Send push notifications
+      let dispatchStatus = 'sent';
+
+      // 6A. Send via FCM HTTP v1 (Android native)
+      if (fcmTokens.length > 0) {
+        try {
+          const serviceAccount = await resolveFcmServiceAccount();
+          if (serviceAccount) {
+            const fcmApp = getFirebaseAdminApp(serviceAccount);
+            const { getMessaging } = require('firebase-admin/messaging');
+            const messaging = getMessaging(fcmApp);
+
+            // Chunk FCM tokens by 500
+            const fcmChunks = [];
+            for (let i = 0; i < fcmTokens.length; i += 500) {
+              fcmChunks.push(fcmTokens.slice(i, i + 500));
             }
-          ] : []
-        }));
 
-        // Chunk messages into groups of 100 (Expo limits batch payloads to 100 messages)
-        const chunks = [];
-        for (let i = 0; i < messages.length; i += 100) {
-          chunks.push(messages.slice(i, i + 100));
+            for (let i = 0; i < fcmChunks.length; i++) {
+              const tokensChunk = fcmChunks[i];
+              const soundNameForAndroid = noti.sound_name || 'default';
+              const soundFileForApns = noti.sound_name && noti.sound_name !== 'default' 
+                ? `${noti.sound_name}.mp3` 
+                : 'default';
+
+              const message = {
+                tokens: tokensChunk,
+                notification: {
+                  title: noti.title,
+                  body: noti.body
+                },
+                data: {
+                  id: String(noti.id),
+                  notification_type: String(noti.notification_type),
+                  target_vrat_id: noti.target_vrat_id ? String(noti.target_vrat_id) : '',
+                  coin_amount: noti.coin_amount ? String(noti.coin_amount) : '',
+                  sound_name: noti.sound_name ? String(noti.sound_name) : 'default',
+                  sound_url: noti.sound_url ? String(noti.sound_url) : '',
+                },
+                android: {
+                  notification: {
+                    sound: soundNameForAndroid,
+                    channelId: soundNameForAndroid
+                  }
+                },
+                apns: {
+                  payload: {
+                    aps: {
+                      sound: soundFileForApns
+                    }
+                  }
+                }
+              };
+
+              if (noti.image_url) {
+                message.notification.imageUrl = noti.image_url;
+                message.data.image_url = noti.image_url;
+                message.android.notification.image = noti.image_url;
+              }
+
+              console.log(`📤 [Notification Dispatcher] Sending FCM HTTP v1 chunk ${i + 1}/${fcmChunks.length} containing ${tokensChunk.length} targets...`);
+              const response = await messaging.sendEachForMulticast(message);
+              console.log(`✅ [Notification Dispatcher] FCM Chunk ${i + 1} sent: successCount=${response.successCount}, failureCount=${response.failureCount}`);
+
+              // Automatic Cleanup of Invalid/Inactive Tokens
+              if (response.failureCount > 0) {
+                const tokensToRemove = [];
+                response.responses.forEach((res, idx) => {
+                  if (!res.success) {
+                    const errCode = res.error?.code;
+                    console.warn(`⚠️ [Notification Dispatcher] FCM Token delivery failed for token [${tokensChunk[idx].substring(0, 15)}...]:`, errCode, res.error?.message);
+                    if (
+                      errCode === 'messaging/registration-token-not-registered' || 
+                      errCode === 'messaging/invalid-argument'
+                    ) {
+                      tokensToRemove.push(tokensChunk[idx]);
+                    }
+                  }
+                });
+
+                if (tokensToRemove.length > 0) {
+                  console.log(`🧹 [Notification Dispatcher] Automatically cleaning up ${tokensToRemove.length} inactive FCM tokens...`);
+                  const { error: cleanErr } = await supabase
+                    .from('user_push_tokens')
+                    .delete()
+                    .in('push_token', tokensToRemove);
+                  
+                  if (cleanErr) {
+                    console.error('❌ [Notification Dispatcher] Failed to clean up invalid tokens:', cleanErr.message);
+                  } else {
+                    console.log('✅ [Notification Dispatcher] Cleaned up invalid tokens successfully.');
+                  }
+                }
+              }
+            }
+          } else {
+            console.log(`⚠️ [Notification Dispatcher] FCM tokens registered but credentials unconfigured/inactive in Settings. Skipping FCM dispatch.`);
+            dispatchStatus = 'failed';
+          }
+        } catch (fcmErr) {
+          console.error(`❌ [Notification Dispatcher] FCM dispatch sequence failed:`, fcmErr.message);
+          dispatchStatus = 'failed';
         }
+      }
 
-        // Send requests to Expo API
-        for (let i = 0; i < chunks.length; i++) {
-          try {
-            console.log(`📤 [Notification Dispatcher] Sending chunk ${i + 1}/${chunks.length} containing ${chunks[i].length} targets...`);
+      // 6B. Send via Expo Push API (Fallback for legacy Expo tokens)
+      if (expoTokens.length > 0) {
+        try {
+          const messages = expoTokens.map(token => {
+            const soundFile = noti.sound_name && noti.sound_name !== 'default'
+              ? `${noti.sound_name}.mp3`
+              : 'default';
+            return {
+              to: token,
+              sound: soundFile,
+              channelId: noti.sound_name || 'default',
+              title: noti.title,
+              body: noti.body,
+              data: {
+                id: noti.id,
+                notification_type: noti.notification_type,
+                target_vrat_id: noti.target_vrat_id,
+                coin_amount: noti.coin_amount,
+                sound_name: noti.sound_name || 'default',
+                sound_url: noti.sound_url || '',
+              },
+              attachments: noti.image_url ? [
+                {
+                  identifier: 'image',
+                  url: noti.image_url,
+                  type: noti.image_url.toLowerCase().endsWith('.gif') ? 'image/gif' : 'image/jpeg'
+                }
+              ] : []
+            };
+          });
+
+          const chunks = [];
+          for (let i = 0; i < messages.length; i += 100) {
+            chunks.push(messages.slice(i, i + 100));
+          }
+
+          for (let i = 0; i < chunks.length; i++) {
+            console.log(`📤 [Notification Dispatcher] Sending Expo chunk ${i + 1}/${chunks.length} containing ${chunks[i].length} targets...`);
             const response = await axios.post('https://exp.host/--/api/v2/push/send', chunks[i], {
               headers: {
                 'Accept': 'application/json',
@@ -172,29 +389,50 @@ async function checkAndDispatchNotifications() {
                 'Content-Type': 'application/json',
               }
             });
-            console.log(`✅ [Notification Dispatcher] Chunk ${i + 1} sent:`, response.data);
-          } catch (apiErr) {
-            console.error(`❌ [Notification Dispatcher] Failed to send chunk ${i + 1}:`, apiErr.message);
+            console.log(`✅ [Notification Dispatcher] Expo Chunk ${i + 1} sent:`, response.data);
           }
+        } catch (expoErr) {
+          console.error(`❌ [Notification Dispatcher] Expo dispatch sequence failed:`, expoErr.message);
+          dispatchStatus = 'failed';
         }
-      } else {
+      }
+
+      if (fcmTokens.length === 0 && expoTokens.length === 0) {
         console.log(`⚠️ [Notification Dispatcher] No active push tokens registered. Dispatching 0 notifications.`);
       }
 
-      // 7. Update status to 'sent'
-      const { error: updateErr } = await supabase
-        .from('push_notifications')
-        .update({
-          status: 'sent',
-          sent_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', noti.id);
-
-      if (updateErr) {
-        console.error(`❌ [Notification Dispatcher] Failed to update status for notification ${noti.id}:`, updateErr.message);
+      // 7. Update status or Reschedule if recurring
+      if (noti.is_recurring && dispatchStatus === 'sent') {
+        const nextDate = addOneDay(noti.scheduled_date);
+        console.log(`🔁 [Notification Dispatcher] Notification ${noti.id} is recurring. Rescheduling for tomorrow: ${nextDate}`);
+        const { error: updateErr } = await supabase
+          .from('push_notifications')
+          .update({
+            scheduled_date: nextDate,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', noti.id);
+        
+        if (updateErr) {
+          console.error(`❌ [Notification Dispatcher] Failed to reschedule recurring notification ${noti.id}:`, updateErr.message);
+        } else {
+          console.log(`✅ [Notification Dispatcher] Successfully rescheduled recurring notification ${noti.id} to ${nextDate}.`);
+        }
       } else {
-        console.log(`✅ [Notification Dispatcher] Marked notification ${noti.id} as "sent".`);
+        const { error: updateErr } = await supabase
+          .from('push_notifications')
+          .update({
+            status: dispatchStatus,
+            sent_at: dispatchStatus === 'sent' ? new Date().toISOString() : null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', noti.id);
+
+        if (updateErr) {
+          console.error(`❌ [Notification Dispatcher] Failed to update status for notification ${noti.id}:`, updateErr.message);
+        } else {
+          console.log(`✅ [Notification Dispatcher] Marked notification ${noti.id} as "${dispatchStatus}".`);
+        }
       }
     }
   } catch (err) {
@@ -224,5 +462,6 @@ function startNotificationDispatcher() {
 
 module.exports = {
   startNotificationDispatcher,
-  checkAndDispatchNotifications
+  checkAndDispatchNotifications,
+  resolveFcmServiceAccount
 };

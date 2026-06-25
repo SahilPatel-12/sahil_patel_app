@@ -64,7 +64,13 @@ const resolveAstrologyConfig = async (provider) => {
 
     if (supabase) {
         try {
-            const encryptionKey = process.env.EXPO_PUBLIC_ENCRYPTION_KEY || process.env.VITE_ENCRYPTION_KEY || 'sg6XisTlL2QcXSuE';
+            const encryptionKey = process.env.EXPO_PUBLIC_ENCRYPTION_KEY || process.env.VITE_ENCRYPTION_KEY;
+            if (!encryptionKey) {
+                throw new Error('Encryption key is missing in environment variables.');
+            }
+            if (encryptionKey.length < 16) {
+                throw new Error('Encryption key must be at least 16 characters long.');
+            }
             
             // Try fetching specific provider config first
             let { data: config } = await supabase

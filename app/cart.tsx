@@ -20,6 +20,8 @@ import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../services/supabase';
 import { safeStorage } from '../services/storage';
+import DatePickerModal from '../components/DatePickerModal';
+import TimePickerModal from '../components/TimePickerModal';
 
 const { width } = Dimensions.get('window');
 
@@ -201,6 +203,8 @@ export default function CartScreen() {
   const [contactPhone, setContactPhone] = useState('');
   const [specialWish, setSpecialWish] = useState('');
   const [preferredDate, setPreferredDate] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [preferredTime, setPreferredTime] = useState('');
 
   // Form Inputs: Products
@@ -424,7 +428,8 @@ export default function CartScreen() {
         Alert.alert(t('Name Required'), t('Please enter Devotee Name for the sacred Sankalp.'));
         return;
       }
-      if (!contactPhone.trim() || contactPhone.length < 10) {
+      const contactDigits = contactPhone.replace(/\D/g, "");
+      if (contactDigits.length < 10) {
         Alert.alert(t('Invalid Phone'), t('Please enter a valid 10-digit contact number.'));
         return;
       }
@@ -444,7 +449,8 @@ export default function CartScreen() {
         Alert.alert(t('Recipient Name Required'), t('Please enter recipient full name for physical shipping.'));
         return;
       }
-      if (!shippingPhone.trim() || shippingPhone.length < 10) {
+      const shippingDigits = shippingPhone.replace(/\D/g, "");
+      if (shippingDigits.length < 10) {
         Alert.alert(t('Shipping Phone Required'), t('Please enter a valid 10-digit phone number for delivery updates.'));
         return;
       }
@@ -518,13 +524,26 @@ export default function CartScreen() {
 
       // 3. Insert Puja booking details
       if (hasPujaItems) {
+        let finalNotes = specialWish.trim() || null;
+        try {
+          const selectedPanditName = await safeStorage.getItem('selected_pandit_name');
+          if (selectedPanditName) {
+            finalNotes = finalNotes
+              ? `${finalNotes} [Performing Pandit: ${selectedPanditName}]`
+              : `[Performing Pandit: ${selectedPanditName}]`;
+            await safeStorage.removeItem('selected_pandit_name');
+          }
+        } catch (err) {
+          console.warn('Error fetching or removing selected_pandit_name in checkout:', err);
+        }
+
         const { error: pujaError } = await supabase
           .from('puja_booking_details')
           .insert({
             order_id: orderId,
             devotee_name: devoteeName.trim(),
             gotra: gotra.trim() || null,
-            special_notes: specialWish.trim() || null,
+            special_notes: finalNotes,
             preferred_date: preferredDate,
             preferred_time: preferredTime.trim()
           });
@@ -726,7 +745,7 @@ export default function CartScreen() {
                           placeholder={t('10-digit number')}
                           placeholderTextColor="#94a3b8"
                           keyboardType="phone-pad"
-                          maxLength={10}
+                          maxLength={15}
                           value={contactPhone}
                           onChangeText={setContactPhone}
                         />
@@ -735,24 +754,36 @@ export default function CartScreen() {
 
                     <View style={styles.inputRow}>
                       <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
-                        <Text style={styles.inputLabel}>{t('Preferred Date')} (YYYY-MM-DD) *</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          placeholder={t('e.g. 2026-06-15')}
-                          placeholderTextColor="#94a3b8"
-                          value={preferredDate}
-                          onChangeText={setPreferredDate}
-                        />
+                        <Text style={styles.inputLabel}>{t('Preferred Date')} *</Text>
+                        <TouchableOpacity
+                          style={[styles.textInput, { justifyContent: "center" }]}
+                          onPress={() => setShowDatePicker(true)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={{
+                            fontSize: 13,
+                            fontFamily: "Outfit-Medium",
+                            color: preferredDate ? "#0f172a" : "#94a3b8"
+                          }}>
+                            {preferredDate || t("Select Date")}
+                          </Text>
+                        </TouchableOpacity>
                       </View>
                       <View style={[styles.inputGroup, { flex: 1 }]}>
                         <Text style={styles.inputLabel}>{t('Preferred Time')} *</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          placeholder={t('e.g. 6:00 PM')}
-                          placeholderTextColor="#94a3b8"
-                          value={preferredTime}
-                          onChangeText={setPreferredTime}
-                        />
+                        <TouchableOpacity
+                          style={[styles.textInput, { justifyContent: "center" }]}
+                          onPress={() => setShowTimePicker(true)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={{
+                            fontSize: 13,
+                            fontFamily: "Outfit-Medium",
+                            color: preferredTime ? "#0f172a" : "#94a3b8"
+                          }}>
+                            {preferredTime || t("Select Time")}
+                          </Text>
+                        </TouchableOpacity>
                       </View>
                     </View>
 
@@ -800,7 +831,7 @@ export default function CartScreen() {
                         placeholder={t('10-digit phone number')}
                         placeholderTextColor="#94a3b8"
                         keyboardType="phone-pad"
-                        maxLength={10}
+                        maxLength={15}
                         value={shippingPhone}
                         onChangeText={setShippingPhone}
                       />
@@ -1013,6 +1044,18 @@ export default function CartScreen() {
             </TouchableOpacity>
           </View>
         )}
+        <DatePickerModal
+          visible={showDatePicker}
+          onClose={() => setShowDatePicker(false)}
+          onSelectDate={setPreferredDate}
+          selectedValue={preferredDate}
+        />
+        <TimePickerModal
+          visible={showTimePicker}
+          onClose={() => setShowTimePicker(false)}
+          onSelectTime={setPreferredTime}
+          selectedValue={preferredTime}
+        />
       </SafeAreaView>
     </View>
   );

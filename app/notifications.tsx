@@ -51,11 +51,26 @@ export default function NotificationsScreen() {
   const fetchNotifications = async () => {
     setLoading(true);
     try {
-      // Fetch sent notifications
-      const { data, error } = await supabase
+      let loggedInUserId = null;
+      const sessionStr = await safeStorage.getItem('user_session');
+      if (sessionStr) {
+        const session = JSON.parse(sessionStr);
+        loggedInUserId = (session.user || session).id;
+      }
+
+      // Fetch sent notifications (global notifications + user-specific notifications)
+      let query = supabase
         .from('push_notifications')
         .select('*')
-        .eq('status', 'sent')
+        .eq('status', 'sent');
+
+      if (loggedInUserId) {
+        query = query.or(`user_id.is.null,user_id.eq.${loggedInUserId}`);
+      } else {
+        query = query.is('user_id', null);
+      }
+
+      const { data, error } = await query
         .order('scheduled_date', { ascending: false })
         .order('scheduled_time', { ascending: false });
 

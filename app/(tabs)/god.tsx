@@ -79,29 +79,7 @@ const GOD_DATA = [
   { id: '7', name: 'Venkateswara', image: require('../../assets/God/Lord Venkateswara Images Full Hd Wallpaper 1.png'), color: '#f1c40f' },
 ];
 
-const FALLBACK_IMAGES: Record<string, any[]> = {
-  'Shiv Ji': [
-    { id: 'fb-shiva-1', image_url: '', local_image: require('../../assets/God/god1.png') }
-  ],
-  'Ma Laxmi': [
-    { id: 'fb-laxmi-1', image_url: '', local_image: require('../../assets/God/god.png') }
-  ],
-  'Venkateswara': [
-    { id: 'fb-venkateswara-1', image_url: '', local_image: require('../../assets/God/Lord Venkateswara Images Full Hd Wallpaper 1.png') }
-  ],
-  'Ganesha': [
-    { id: 'fb-ganesha-1', image_url: '', local_image: require('../../assets/bhagwan/ganesha.png') }
-  ],
-  'Hanuman': [
-    { id: 'fb-hanuman-1', image_url: '', local_image: require('../../assets/bhagwan/hanuman.png') }
-  ],
-  'Durga Ma': [
-    { id: 'fb-durga-1', image_url: '', local_image: require('../../assets/bhagwan/durga.png') }
-  ],
-  'Krishna Ji': [
-    { id: 'fb-krishna-1', image_url: '', local_image: require('../../assets/bhagwan/krishna.png') }
-  ]
-};
+// Fallback images are now handled dynamically by referring to the selected god category's main local image.
 
 const FLOWER_OPTIONS = [
   { id: 'fl-1', name: 'Marigold', source: require('../../assets/God/flower1.png'), blossom_timing: 4000, shower_duration: 10000 },
@@ -180,11 +158,64 @@ const FlowerItem = ({ data, source }: { data: any; source: any }) => {
   );
 };
 
+const DeityImageWrapper = ({ item, selectedGodName }: { item: any; selectedGodName: string }) => {
+  const [isLoaded, setIsLoaded] = useState(false);
+  const spinValue = useSharedValue(0);
+
+  useEffect(() => {
+    // Keep spinning while not loaded
+    if (!isLoaded) {
+      spinValue.value = withRepeat(
+        withTiming(360, { duration: 1500, easing: Easing.linear }),
+        -1,
+        false
+      );
+    } else {
+      spinValue.value = 0;
+    }
+  }, [isLoaded]);
+
+  const spinStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ rotate: `${spinValue.value}deg` }],
+    };
+  });
+
+  return (
+    <View style={styles.deityPage}>
+      <ExpoImage
+        source={item.local_image ? item.local_image : { uri: item.image_url }}
+        style={[
+          styles.fullGodImage,
+          !item.local_image && { width: '106%', height: '107%' },
+          selectedGodName === 'Shiv Ji' && { marginTop: -10 },
+          selectedGodName === 'Ma Laxmi' && { marginTop: -70 },
+          selectedGodName === 'Venkateswara' && { marginTop: 0 }
+        ]}
+        contentFit="contain"
+        cachePolicy="disk"
+        onLoad={() => setIsLoaded(true)}
+      />
+      
+      {!isLoaded && (
+        <View style={styles.spinnerContainer}>
+          <Animated.Image
+            source={require('../../assets/imp_pngs/pngegg (2).png')}
+            style={[styles.loaderSpinner, spinStyle]}
+            resizeMode="contain"
+          />
+        </View>
+      )}
+    </View>
+  );
+};
+
 export default function GodScreen() {
   const { t } = useLanguage();
   const [categories, setCategories] = useState<any[]>(GOD_DATA);
   const [selectedGod, setSelectedGod] = useState(GOD_DATA[1]); // Default to Ma Laxmi
   const [displayImages, setDisplayImages] = useState<any[]>([]);
+  const [allGodImages, setAllGodImages] = useState<any[]>([]);
   const [isLoadingImages, setIsLoadingImages] = useState(false);
   const [debugStatus, setDebugStatus] = useState<string>('');
   const flatListRef = useRef<FlatList>(null);
@@ -192,6 +223,10 @@ export default function GodScreen() {
   const leftBellRotation = useSharedValue(0);
   const rightBellRotation = useSharedValue(0);
   const bellPlayer = useAudioPlayer(require('../../assets/Sound/bell_sound.mp3'), {
+    downloadFirst: true,
+    keepAudioSessionActive: true,
+  });
+  const aartiPlayer = useAudioPlayer(require('../../assets/arti_sound/Ujjain Mahakal Aarti - Spiritual Melody.mp3'), {
     downloadFirst: true,
     keepAudioSessionActive: true,
   });
@@ -225,7 +260,13 @@ export default function GodScreen() {
   const loadUserWalletAndUnlockedFlowers = useCallback(async () => {
     try {
       const sessionStr = await safeStorage.getItem('user_session');
-      if (!sessionStr) return;
+      if (!sessionStr) {
+        setUserId(null);
+        setCoinBalance(0);
+        setUnlockedFlowerIds([]);
+        setUnlockedThaliIds([]);
+        return;
+      }
       const parsed = JSON.parse(sessionStr);
       setUserId(parsed.id);
 
@@ -292,131 +333,165 @@ export default function GodScreen() {
     transform: [{ translateY: bottomSheetTranslateY.value }],
   }));
 
-  const handleOfferFlower = () => {
+  const startFlowerShower = (flowerItem = selectedFlower, forceContinuous = false) => {
+    setSelectedFlower(flowerItem);
+    setIsFlowersActive(true);
+
     if (flowerTimerRef.current) {
       clearTimeout(flowerTimerRef.current);
       flowerTimerRef.current = null;
     }
 
-    if (isFlowersActive) {
-      setIsFlowersActive(false);
-      setFlowers([]);
-    } else {
-      setIsFlowersActive(true);
-      const baselineDuration = selectedFlower.blossom_timing || 4000;
-      const newFlowers = Array.from({ length: 60 }).map((_, i) => ({
-        id: i,
-        startX: Math.random() * width,
-        startY: Math.random() * (height + 150) - 50,
-        duration: baselineDuration + (Math.random() - 0.5) * 1500,
-        rotationSpeed: 1000 + Math.random() * 1000,
-        size: 20 + Math.random() * 20,
-      }));
-      setFlowers(newFlowers);
+    const baselineDuration = flowerItem.blossom_timing || 4000;
+    const newFlowers = Array.from({ length: 60 }).map((_, i) => ({
+      id: i,
+      startX: Math.random() * width,
+      startY: Math.random() * (height + 150) - 50,
+      duration: baselineDuration + (Math.random() - 0.5) * 1500,
+      rotationSpeed: 1000 + Math.random() * 1000,
+      size: 20 + Math.random() * 20,
+    }));
+    setFlowers(newFlowers);
 
-      const showerDuration = selectedFlower.shower_duration || 10000;
+    if (!forceContinuous && !isArtiActive) {
+      const showerDuration = flowerItem.shower_duration || 10000;
       flowerTimerRef.current = setTimeout(() => {
         setIsFlowersActive(false);
         setFlowers([]);
         flowerTimerRef.current = null;
       }, showerDuration);
+    }
+  };
+
+  const stopFlowerShower = () => {
+    if (flowerTimerRef.current) {
+      clearTimeout(flowerTimerRef.current);
+      flowerTimerRef.current = null;
+    }
+    setIsFlowersActive(false);
+    setFlowers([]);
+  };
+
+  const stopAartiSound = () => {
+    try {
+      if (aartiPlayer) {
+        aartiPlayer.pause();
+        aartiPlayer.seekTo(0);
+      }
+    } catch (error) {
+      console.log('[GodScreen] Error pausing/resetting aarti sound:', error);
+    }
+  };
+
+  const startAartiWithFlowers = (thaliItem = selectedThali) => {
+    setSelectedThali(thaliItem);
+    setIsArtiActive(true);
+    thaliProgress.value = 0;
+    thaliProgress.value = withRepeat(
+      withTiming(1, { duration: 3000, easing: Easing.linear }),
+      -1,
+      false
+    );
+
+    // Automatically trigger continuous flower shower
+    startFlowerShower(selectedFlower, true);
+
+    // Play Aarti sound in a loop
+    try {
+      if (aartiPlayer) {
+        aartiPlayer.loop = true;
+        aartiPlayer.play();
+      }
+    } catch (error) {
+      console.log('[GodScreen] Error playing aarti sound:', error);
+    }
+  };
+
+  const toggleAartiWithFlowers = () => {
+    if (isArtiActive) {
+      setIsArtiActive(false);
+      cancelAnimation(thaliProgress);
+      stopFlowerShower();
+      stopAartiSound();
+    } else {
+      startAartiWithFlowers(selectedThali);
+    }
+  };
+
+  const handleOfferFlower = () => {
+    if (isFlowersActive) {
+      stopFlowerShower();
+    } else {
+      startFlowerShower(selectedFlower);
     }
     closeBottomSheet();
   };
 
   const handleToggleAarti = () => {
-    if (isArtiActive) {
-      setIsArtiActive(false);
-      cancelAnimation(thaliProgress);
-    } else {
-      setIsArtiActive(true);
-      thaliProgress.value = 0;
-      thaliProgress.value = withRepeat(
-        withTiming(1, { duration: 4000, easing: Easing.linear }),
-        -1,
-        false
-      );
-    }
+    toggleAartiWithFlowers();
     closeBottomSheet();
   };
 
   const toggleFlowers = () => {
-    if (flowerTimerRef.current) {
-      clearTimeout(flowerTimerRef.current);
-      flowerTimerRef.current = null;
-    }
-
-    if (!isFlowersActive) {
-      setIsFlowersActive(true);
-      const baselineDuration = selectedFlower.blossom_timing || 4000;
-      // Generate 60 random flowers for a denser shower
-      const newFlowers = Array.from({ length: 60 }).map((_, i) => ({
-        id: i,
-        startX: Math.random() * width,
-        startY: Math.random() * (height + 150) - 50,
-        duration: baselineDuration + (Math.random() - 0.5) * 1500,
-        rotationSpeed: 1000 + Math.random() * 1000,
-        size: 20 + Math.random() * 20,
-      }));
-      setFlowers(newFlowers);
-
-      const showerDuration = selectedFlower.shower_duration || 10000;
-      flowerTimerRef.current = setTimeout(() => {
-        setIsFlowersActive(false);
-        setFlowers([]);
-        flowerTimerRef.current = null;
-      }, showerDuration);
+    if (isFlowersActive) {
+      stopFlowerShower();
     } else {
-      setIsFlowersActive(false);
-      setFlowers([]);
+      startFlowerShower(selectedFlower);
     }
   };
 
   const toggleArti = () => {
-    if (!isArtiActive) {
-      setIsArtiActive(true);
-      thaliProgress.value = 0;
-      thaliProgress.value = withRepeat(
-        withTiming(1, { duration: 4000, easing: Easing.linear }),
-        -1,
-        false
-      );
-    } else {
-      setIsArtiActive(false);
-      cancelAnimation(thaliProgress);
-    }
+    toggleAartiWithFlowers();
   };
 
-  const fetchGodImages = async (categoryName: string) => {
-    console.log(`[GodScreen] fetchGodImages started for: "${categoryName}"`);
+  const fetchGodImages = async (categoryName: string, forceReload = false) => {
+    console.log(`[GodScreen] fetchGodImages started for: "${categoryName}" (forceReload: ${forceReload})`);
     setIsLoadingImages(true);
-    setDebugStatus(`Querying database for "${categoryName}"...`);
+    setDebugStatus(`Loading deity images...`);
     try {
-      const { data, error } = await supabase
-        .from('god_images')
-        .select('*')
-        .eq('category', categoryName)
-        .order('sort_order', { ascending: true });
+      let currentAllImages = allGodImages;
 
-      if (error) {
-        console.error('[GodScreen] Supabase error fetching deity images:', error);
-        setDebugStatus(`Supabase Error: ${error.message}`);
-        useFallback(categoryName);
-      } else {
-        console.log(`[GodScreen] Supabase returned ${data?.length || 0} images for ${categoryName}`);
-        setDebugStatus(`Loaded ${data?.length || 0} images from Supabase`);
+      if (allGodImages.length === 0 || forceReload) {
+        console.log('[GodScreen] Cache empty or force reload active. Querying database for all deity images...');
+        const { data, error } = await supabase
+          .from('god_images')
+          .select('*')
+          .order('sort_order', { ascending: true });
+
+        if (error) {
+          console.error('[GodScreen] Supabase error fetching all deity images:', error);
+          setDebugStatus(`Supabase Error: ${error.message}`);
+          useFallback(categoryName);
+          setIsLoadingImages(false);
+          return;
+        }
+
+        console.log(`[GodScreen] Supabase returned ${data?.length || 0} total deity images.`);
         if (data && data.length > 0) {
-          setDisplayImages(data);
-          
-          // Prefetch dynamic images for active category
-          const urls = data.map(d => d.image_url).filter(Boolean);
+          setAllGodImages(data);
+          currentAllImages = data;
+
+          // Prefetch all images in the background
+          const urls = data.map((d: any) => d.image_url).filter(Boolean);
           if (urls.length > 0) {
-            console.log(`[GodScreen] Prefetching active category images:`, urls);
+            console.log(`[GodScreen] Background prefetching all ${urls.length} images...`);
             ExpoImage.prefetch(urls);
           }
         } else {
-          useFallback(categoryName);
+          setAllGodImages([]);
+          currentAllImages = [];
         }
+      }
+
+      // Filter local images by category
+      const filtered = currentAllImages.filter((item: any) => item.category === categoryName);
+      console.log(`[GodScreen] Local filtered ${filtered.length} images for "${categoryName}"`);
+
+      if (filtered.length > 0) {
+        setDisplayImages(filtered);
+        setDebugStatus(`Loaded ${filtered.length} images`);
+      } else {
+        useFallback(categoryName);
       }
     } catch (err: any) {
       console.error('[GodScreen] Exception fetching deity images:', err);
@@ -429,18 +504,14 @@ export default function GodScreen() {
 
   const useFallback = (categoryName: string) => {
     setDebugStatus(prev => `${prev} | Using fallback assets`);
-    if (FALLBACK_IMAGES[categoryName]) {
-      setDisplayImages(FALLBACK_IMAGES[categoryName]);
-    } else {
-      // Catch-all
-      setDisplayImages([
-        {
-          id: `fb-${selectedGod.id}`,
-          image_url: '',
-          local_image: selectedGod.image
-        }
-      ]);
-    }
+    // Fall back directly to the selected god's main local image to avoid maintaining static fallback duplicates
+    setDisplayImages([
+      {
+        id: `fb-${selectedGod.id}`,
+        image_url: '',
+        local_image: selectedGod.image
+      }
+    ]);
   };
 
   const fetchGodCategories = async () => {
@@ -484,40 +555,7 @@ export default function GodScreen() {
     }
   };
 
-  const prefetchAdjacentCategories = async (categoryName: string) => {
-    if (categories.length <= 1) return;
-    const currentIndex = categories.findIndex(c => c.name === categoryName);
-    if (currentIndex === -1) return;
-
-    // Prefetch next and previous categories in background
-    const indicesToPrefetch = [
-      (currentIndex + 1) % categories.length,
-      (currentIndex - 1 + categories.length) % categories.length
-    ];
-
-    for (const idx of indicesToPrefetch) {
-      const catName = categories[idx]?.name;
-      if (!catName) continue;
-
-      try {
-        const { data, error } = await supabase
-          .from('god_images')
-          .select('image_url')
-          .eq('category', catName)
-          .order('sort_order', { ascending: true });
-
-        if (!error && data && data.length > 0) {
-          const urls = data.map(d => d.image_url).filter(Boolean);
-          if (urls.length > 0) {
-            console.log(`[GodScreen] Background prefetching adjacent category "${catName}" images:`, urls);
-            ExpoImage.prefetch(urls);
-          }
-        }
-      } catch (err) {
-        console.warn(`[GodScreen] Background prefetch failed for adjacent category ${catName}:`, err);
-      }
-    }
-  };
+  // Prefetching of adjacent categories is no longer needed as all deity images are prefetched on mount.
 
   const fetchPujaOfferings = async () => {
     try {
@@ -549,6 +587,7 @@ export default function GodScreen() {
       const { data: thaliData, error: thaliErr } = await supabase
         .from('god_thalis')
         .select('*')
+        .eq('is_visible', true)
         .order('sort_order', { ascending: true });
 
       if (!thaliErr && thaliData && thaliData.length > 0) {
@@ -610,7 +649,7 @@ export default function GodScreen() {
       .channel('realtime_god_images')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'god_images' }, (payload) => {
         console.log('[GodScreen] Deity images realtime update received:', payload);
-        fetchGodImages(selectedGodRef.current.name);
+        fetchGodImages(selectedGodRef.current.name, true);
       })
       .subscribe();
 
@@ -654,11 +693,7 @@ export default function GodScreen() {
     };
   }, [loadUserWalletAndUnlockedFlowers]);
 
-  useEffect(() => {
-    if (categories.length > 0) {
-      prefetchAdjacentCategories(selectedGod.name);
-    }
-  }, [selectedGod, categories]);
+  // Redundant prefetch effect removed as it is handled at mount-time
 
   useEffect(() => {
     fetchGodImages(selectedGod.name);
@@ -678,25 +713,31 @@ export default function GodScreen() {
       return () => {
         leftBellRotation.value = 0;
         rightBellRotation.value = 0;
+        // Stop animations and sound on unfocus
+        setIsArtiActive(false);
+        cancelAnimation(thaliProgress);
+        stopFlowerShower();
+        stopAartiSound();
       };
     }, [loadUserWalletAndUnlockedFlowers])
   );
 
-  async function playBellSound() {
+  const playBellSound = () => {
     try {
       if (bellPlayer) {
-        // Seek to start to allow replay on subsequent taps
-        await bellPlayer.seekTo(0).catch(err => {
-          console.log('[GodScreen] Error seeking bell player:', err);
-        });
+        // Non-awaited seek is immediate and prevents JS thread block/lag
+        bellPlayer.seekTo(0);
         bellPlayer.play();
       }
     } catch (error) {
-      console.log('[GodScreen] Error playing sound:', error);
+      console.log('[GodScreen] Error playing bell sound:', error);
     }
-  }
+  };
 
   const triggerSwing = (rotationValue: any, shouldPlaySound = true) => {
+    // Cancel any current animation to avoid conflicts on rapid taps
+    cancelAnimation(rotationValue);
+
     if (shouldPlaySound) {
       playBellSound();
     }
@@ -716,6 +757,31 @@ export default function GodScreen() {
       withTiming(0, { duration, easing })
     );
   };
+
+  const triggerBothBells = (shouldPlaySound = true) => {
+    triggerSwing(leftBellRotation, shouldPlaySound);
+    triggerSwing(rightBellRotation, false);
+  };
+
+  useEffect(() => {
+    let bellInterval: any = null;
+
+    if (isArtiActive) {
+      // Trigger immediately when Aarti starts
+      triggerBothBells(true);
+
+      // Trigger every 3 seconds
+      bellInterval = setInterval(() => {
+        triggerBothBells(true);
+      }, 3000);
+    }
+
+    return () => {
+      if (bellInterval) {
+        clearInterval(bellInterval);
+      }
+    };
+  }, [isArtiActive]);
 
   const leftAnimatedStyle = useAnimatedStyle(() => ({
     transform: [
@@ -797,44 +863,10 @@ export default function GodScreen() {
       setCoinBalance(newBalance);
       if (unlockType === 'flower') {
         setUnlockedFlowerIds(prev => [...prev, itemToUnlock.id]);
-        setSelectedFlower(itemToUnlock);
-        
-        // Start the blossom animation immediately!
-        setIsFlowersActive(true);
-        if (flowerTimerRef.current) {
-          clearTimeout(flowerTimerRef.current);
-          flowerTimerRef.current = null;
-        }
-
-        const baselineDuration = itemToUnlock.blossom_timing || 4000;
-        const newFlowers = Array.from({ length: 60 }).map((_, i) => ({
-          id: i,
-          startX: Math.random() * width,
-          startY: Math.random() * (height + 150) - 50,
-          duration: baselineDuration + (Math.random() - 0.5) * 1500,
-          rotationSpeed: 1000 + Math.random() * 1000,
-          size: 20 + Math.random() * 20,
-        }));
-        setFlowers(newFlowers);
-
-        const showerDuration = itemToUnlock.shower_duration || 10000;
-        flowerTimerRef.current = setTimeout(() => {
-          setIsFlowersActive(false);
-          setFlowers([]);
-          flowerTimerRef.current = null;
-        }, showerDuration);
+        startFlowerShower(itemToUnlock);
       } else {
         setUnlockedThaliIds(prev => [...prev, itemToUnlock.id]);
-        setSelectedThali(itemToUnlock);
-        
-        // Start the aarti animation immediately!
-        setIsArtiActive(true);
-        thaliProgress.value = 0;
-        thaliProgress.value = withRepeat(
-          withTiming(1, { duration: 3000, easing: Easing.linear }),
-          -1,
-          false
-        );
+        startAartiWithFlowers(itemToUnlock);
       }
 
       Alert.alert(t('Success'), `${t(itemToUnlock.name)} ${t('unlocked successfully!')}`);
@@ -855,6 +887,9 @@ export default function GodScreen() {
   return (
     <View style={styles.mainContainer}>
       <StatusBar style="dark" />
+
+      {/* Orange Background Bar under the Gate */}
+      <View style={styles.orangeHeaderBg} />
 
       {/* Top Header Area */}
       <View style={styles.headerArea}>
@@ -895,9 +930,9 @@ export default function GodScreen() {
       </View>
 
       {/* Main Content Area */}
-      <View style={styles.contentContainer}>
+      <View style={styles.contentContainer} pointerEvents="box-none">
         {/* The Arch/Gate - Properly centered and scaled */}
-        <View style={styles.visualComposition}>
+        <View style={styles.visualComposition} pointerEvents="box-none">
           {/* Central Deity - Vertical Paging (Reels style) */}
           <View style={styles.deityContainer}>
             <FlatList
@@ -910,20 +945,7 @@ export default function GodScreen() {
               decelerationRate="fast"
               showsVerticalScrollIndicator={false}
               renderItem={({ item }) => (
-                <View style={styles.deityPage}>
-                  <ExpoImage
-                    source={item.local_image ? item.local_image : { uri: item.image_url }}
-                    style={[
-                      styles.fullGodImage,
-                      !item.local_image && { width: '106%', height: '107%' }, // 2% width & 1% height increase for dynamic images
-                      selectedGod.name === 'Shiv Ji' && { marginTop: -10 }, // Move Shiv Ji higher
-                      selectedGod.name === 'Ma Laxmi' && { marginTop: -70 },  // Move Ma Laxmi lower
-                      selectedGod.name === 'Venkateswara' && { marginTop: 0 }    // Lord Venkateswara
-                    ]}
-                    contentFit="contain"
-                    cachePolicy="disk"
-                  />
-                </View>
+                <DeityImageWrapper item={item} selectedGodName={selectedGod.name} />
               )}
             />
           </View>
@@ -985,6 +1007,22 @@ export default function GodScreen() {
 
       {/* Floating Buttons Container */}
       <View style={styles.floatingButtonsContainer}>
+        {/* Floating Arti Selector Toggle Button */}
+        <TouchableOpacity
+          onPress={toggleAartiWithFlowers}
+          style={[
+            styles.artiButton,
+            isArtiActive && styles.artiButtonActive
+          ]}
+        >
+          <ExpoImage
+            source={selectedThali ? selectedThali.source : require('../../assets/God/arti.gif')}
+            style={styles.artiButtonIcon}
+            contentFit="contain"
+            cachePolicy="disk"
+          />
+        </TouchableOpacity>
+
         {/* Flower Selector Toggle Button */}
         <TouchableOpacity
           onPress={() => openBottomSheet('flowers')}
@@ -996,22 +1034,6 @@ export default function GodScreen() {
           <ExpoImage
             source={selectedFlower ? selectedFlower.source : require('../../assets/God/flower1.png')}
             style={styles.flowerButtonIcon}
-            contentFit="contain"
-            cachePolicy="disk"
-          />
-        </TouchableOpacity>
-
-        {/* Floating Arti Selector Toggle Button */}
-        <TouchableOpacity
-          onPress={() => openBottomSheet('thali')}
-          style={[
-            styles.artiButton,
-            isArtiActive && styles.artiButtonActive
-          ]}
-        >
-          <ExpoImage
-            source={selectedThali ? selectedThali.source : require('../../assets/God/arti.gif')}
-            style={styles.artiButtonIcon}
             contentFit="contain"
             cachePolicy="disk"
           />
@@ -1067,19 +1089,19 @@ export default function GodScreen() {
           {/* Tabs */}
           <View style={styles.sheetTabs}>
             <TouchableOpacity 
-              style={[styles.sheetTab, activePoojaTab === 'flowers' && styles.activeSheetTab]}
-              onPress={() => setActivePoojaTab('flowers')}
-            >
-              <Text style={[styles.sheetTabText, activePoojaTab === 'flowers' && styles.activeSheetTabText]}>
-                {t("Flowers")}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
               style={[styles.sheetTab, activePoojaTab === 'thali' && styles.activeSheetTab]}
               onPress={() => setActivePoojaTab('thali')}
             >
               <Text style={[styles.sheetTabText, activePoojaTab === 'thali' && styles.activeSheetTabText]}>
                 {t("Thali")}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.sheetTab, activePoojaTab === 'flowers' && styles.activeSheetTab]}
+              onPress={() => setActivePoojaTab('flowers')}
+            >
+              <Text style={[styles.sheetTabText, activePoojaTab === 'flowers' && styles.activeSheetTabText]}>
+                {t("Flowers")}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1105,32 +1127,7 @@ export default function GodScreen() {
                           return;
                         }
 
-                        setSelectedFlower(item);
-                        setIsFlowersActive(true);
-
-                        if (flowerTimerRef.current) {
-                          clearTimeout(flowerTimerRef.current);
-                          flowerTimerRef.current = null;
-                        }
-
-                        const baselineDuration = item.blossom_timing || 4000;
-                        const newFlowers = Array.from({ length: 60 }).map((_, i) => ({
-                          id: i,
-                          startX: Math.random() * width,
-                          startY: Math.random() * (height + 150) - 50,
-                          duration: baselineDuration + (Math.random() - 0.5) * 1500,
-                          rotationSpeed: 1000 + Math.random() * 1000,
-                          size: 20 + Math.random() * 20,
-                        }));
-                        setFlowers(newFlowers);
-
-                        const showerDuration = item.shower_duration || 10000;
-                        flowerTimerRef.current = setTimeout(() => {
-                          setIsFlowersActive(false);
-                          setFlowers([]);
-                          flowerTimerRef.current = null;
-                        }, showerDuration);
-
+                        startFlowerShower(item);
                         closeBottomSheet();
                       }}
                     >
@@ -1176,14 +1173,7 @@ export default function GodScreen() {
                           return;
                         }
 
-                        setSelectedThali(item);
-                        setIsArtiActive(true);
-                        thaliProgress.value = 0;
-                        thaliProgress.value = withRepeat(
-                          withTiming(1, { duration: 3000, easing: Easing.linear }),
-                          -1,
-                          false
-                        );
+                        startAartiWithFlowers(item);
                         closeBottomSheet();
                       }}
                     >
@@ -1349,10 +1339,32 @@ export default function GodScreen() {
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
-    backgroundColor: '#eb984e',
+    backgroundColor: '#000000',
+  },
+  spinnerContainer: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: '40%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 5,
+  },
+  loaderSpinner: {
+    width: 120,
+    height: 120,
   },
   headerArea: {
-    zIndex: 10,
+    zIndex: 30,
+    backgroundColor: 'transparent',
+  },
+  orangeHeaderBg: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 140,
+    backgroundColor: '#eb984e',
+    zIndex: 5,
   },
   godListBar: {
     marginHorizontal: 15,
@@ -1408,6 +1420,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     flex: 1,
     marginTop: 10,
+    zIndex: 20,
   },
   visualComposition: {
     flex: 1,

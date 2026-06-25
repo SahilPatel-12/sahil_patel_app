@@ -4,7 +4,65 @@ import {
   Image as ImageIcon, Sparkles, Filter, Eye, RefreshCw, FolderPlus
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
-import { uploadToR2 } from './lib/r2';
+import { uploadToR2, deleteFromR2 } from './lib/r2';
+
+// Dynamic client-side image compression utility
+const compressImage = (file, maxWidth, maxHeight) => {
+  return new Promise((resolve, reject) => {
+    if (file.type === 'image/gif') {
+      // Do not compress GIFs to preserve animations
+      resolve(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        // Adjust dimensions proportionally
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Export as transparent PNG
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error('Canvas rendering failed'));
+              return;
+            }
+            const compressedFile = new File([blob], file.name, {
+              type: 'image/png',
+              lastModified: Date.now()
+            });
+            resolve(compressedFile);
+          },
+          'image/png'
+        );
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
+};
 
 // Custom SVGs for a devotional preview vibe inside simulator
 const TempleGateSVG = () => (
@@ -138,6 +196,17 @@ export default function GodImagesManagerPage() {
   const [categoryFormData, setCategoryFormData] = useState(initialCategoryFormState);
   const categoryIconInputRef = useRef(null);
 
+  // Pending files & image compression metadata states
+  const [pendingImageFile, setPendingImageFile] = useState(null);
+  const [pendingImagePreview, setPendingImagePreview] = useState('');
+  const [compressingImage, setCompressingImage] = useState(false);
+  const [imageSizes, setImageSizes] = useState({ original: 0, compressed: 0 });
+
+  const [pendingIconFile, setPendingIconFile] = useState(null);
+  const [pendingIconPreview, setPendingIconPreview] = useState('');
+  const [compressingIcon, setCompressingIcon] = useState(false);
+  const [iconSizes, setIconSizes] = useState({ original: 0, compressed: 0 });
+
   const fetchGodImages = async () => {
     setLoading(true);
     try {
@@ -212,7 +281,7 @@ export default function GodImagesManagerPage() {
     }));
   };
 
-  const handleImageUpload = async (e) => {
+  const handleImageSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -221,63 +290,100 @@ export default function GodImagesManagerPage() {
       return;
     }
 
-    setUploadingImage(true);
-    setUploadProgress(0);
+    if (pendingImagePreview) {
+      URL.revokeObjectURL(pendingImagePreview);
+    }
+
+    setCompressingImage(true);
     try {
-      showMessage('Uploading God image to Cloudflare R2...');
-      const publicUrl = await uploadToR2(file, 'gods', (progress) => {
-        setUploadProgress(progress);
+      showMessage('Compressing deity background image...');
+      const compressedFile = await compressImage(file, 1080, 1728);
+      setPendingImageFile(compressedFile);
+      setPendingImagePreview(URL.createObjectURL(compressedFile));
+      setImageSizes({
+        original: file.size,
+        compressed: compressedFile.size
       });
-      setFormData(prev => ({
-        ...prev,
-        image_url: publicUrl
-      }));
-      showMessage('God image uploaded successfully to Cloudflare!');
+      showMessage('Image compressed successfully (Ready to publish on submit).');
     } catch (err) {
-      console.error('Image upload error:', err);
-      showMessage(`Upload failed: ${err.message}`, true);
+      console.error('Image compression error:', err);
+      showMessage(`Compression failed: ${err.message}`, true);
     } finally {
-      setUploadingImage(false);
+      setCompressingImage(false);
     }
   };
 
-  const handleIconUpload = async (e) => {
+  const handleIconSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      showMessage('Please select a valid icon file.', true);
+      showMessage('Please select a valid image file.', true);
       return;
     }
 
-    setUploadingIcon(true);
-    setIconUploadProgress(0);
+    if (pendingIconPreview) {
+      URL.revokeObjectURL(pendingIconPreview);
+    }
+
+    setCompressingIcon(true);
     try {
-      showMessage('Uploading category icon to Cloudflare R2...');
-      const publicUrl = await uploadToR2(file, 'categories', (progress) => {
-        setIconUploadProgress(progress);
+      showMessage('Compressing category icon...');
+      const compressedFile = await compressImage(file, 512, 512);
+      setPendingIconFile(compressedFile);
+      setPendingIconPreview(URL.createObjectURL(compressedFile));
+      setIconSizes({
+        original: file.size,
+        compressed: compressedFile.size
       });
-      setCategoryFormData(prev => ({
-        ...prev,
-        icon_url: publicUrl
-      }));
-      showMessage('Category icon uploaded successfully to Cloudflare!');
+      showMessage('Icon compressed successfully (Ready to create category on submit).');
     } catch (err) {
-      console.error('Category icon upload error:', err);
-      showMessage(`Upload failed: ${err.message}`, true);
+      console.error('Icon compression error:', err);
+      showMessage(`Compression failed: ${err.message}`, true);
     } finally {
-      setUploadingIcon(false);
+      setCompressingIcon(false);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.image_url) return showMessage('A God image file must be uploaded.', true);
+    
+    let imageUrl = formData.image_url;
+    
+    if (pendingImageFile) {
+      setUploadingImage(true);
+      setUploadProgress(0);
+      try {
+        imageUrl = await uploadToR2(pendingImageFile, 'hero', (progress) => {
+          setUploadProgress(progress);
+        });
+        
+        // Delete the old image from R2 if editing and updating image
+        if (isEditingId) {
+          const oldImg = images.find(img => img.id === isEditingId);
+          if (oldImg && oldImg.image_url && oldImg.image_url !== imageUrl) {
+            await deleteFromR2(oldImg.image_url);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to upload deity image to R2:', err);
+        showMessage(`Upload failed: ${err.message}`, true);
+        setUploadingImage(false);
+        return;
+      } finally {
+        setUploadingImage(false);
+      }
+    }
+    
+    if (!imageUrl) {
+      return showMessage('Please select a deity image to compress and upload.', true);
+    }
+    
     if (!formData.category) return showMessage('Please select a deity category.', true);
 
     const payload = {
       category: formData.category,
-      image_url: formData.image_url,
+      image_url: imageUrl,
       sort_order: parseInt(formData.sort_order) || 0
     };
 
@@ -301,7 +407,15 @@ export default function GodImagesManagerPage() {
         showMessage('New God image added successfully!');
       }
 
-      // Reset form
+      // Reset form and revoke blob URL
+      if (pendingImagePreview) {
+        URL.revokeObjectURL(pendingImagePreview);
+      }
+      setPendingImageFile(null);
+      setPendingImagePreview('');
+      setImageSizes({ original: 0, compressed: 0 });
+      setUploadProgress(0);
+      
       setFormData({
         category: categories[0]?.name || '',
         image_url: '',
@@ -320,9 +434,36 @@ export default function GodImagesManagerPage() {
     e.preventDefault();
     if (!categoryFormData.name.trim()) return showMessage('Category name is required.', true);
 
+    let iconUrl = categoryFormData.icon_url;
+
+    if (pendingIconFile) {
+      setUploadingIcon(true);
+      setIconUploadProgress(0);
+      try {
+        iconUrl = await uploadToR2(pendingIconFile, 'categories', (progress) => {
+          setIconUploadProgress(progress);
+        });
+
+        // Delete the old icon from R2 if editing and updating icon
+        if (isEditingCategoryId) {
+          const oldCat = categories.find(c => c.id === isEditingCategoryId);
+          if (oldCat && oldCat.icon_url && oldCat.icon_url !== iconUrl) {
+            await deleteFromR2(oldCat.icon_url);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to upload category icon to R2:', err);
+        showMessage(`Upload failed: ${err.message}`, true);
+        setUploadingIcon(false);
+        return;
+      } finally {
+        setUploadingIcon(false);
+      }
+    }
+
     const payload = {
       name: categoryFormData.name.trim(),
-      icon_url: categoryFormData.icon_url,
+      icon_url: iconUrl,
       sort_order: parseInt(categoryFormData.sort_order) || 0
     };
 
@@ -346,7 +487,15 @@ export default function GodImagesManagerPage() {
         showMessage('New deity category created successfully!');
       }
 
-      // Reset Form
+      // Reset Form and revoke blob URL
+      if (pendingIconPreview) {
+        URL.revokeObjectURL(pendingIconPreview);
+      }
+      setPendingIconFile(null);
+      setPendingIconPreview('');
+      setIconSizes({ original: 0, compressed: 0 });
+      setIconUploadProgress(0);
+
       setCategoryFormData(initialCategoryFormState);
       setIsEditingCategoryId(null);
       if (categoryIconInputRef.current) categoryIconInputRef.current.value = '';
@@ -382,13 +531,19 @@ export default function GodImagesManagerPage() {
     if (!window.confirm('Are you sure you want to delete this deity image?')) return;
 
     try {
+      const imgToDelete = images.find(img => img.id === id);
+      if (imgToDelete && imgToDelete.image_url) {
+        showMessage('Deleting image file from Cloudflare R2...');
+        await deleteFromR2(imgToDelete.image_url);
+      }
+
       const { error: delErr } = await supabase
         .from('god_images')
         .delete()
         .eq('id', id);
 
       if (delErr) throw delErr;
-      showMessage('God image deleted successfully.');
+      showMessage('God image deleted successfully from both Database & Cloudflare R2.');
       
       if (selectedPreviewImage?.id === id) {
         setSelectedPreviewImage(null);
@@ -405,13 +560,35 @@ export default function GodImagesManagerPage() {
     if (!window.confirm(`Are you sure you want to delete category "${name}"? This will delete all background images associated with it.`)) return;
 
     try {
+      // 1. Delete all background images in R2 associated with this category
+      const imagesToDelete = images.filter(img => img.category === name);
+      if (imagesToDelete.length > 0) {
+        showMessage(`Deleting ${imagesToDelete.length} deity background images from Cloudflare R2...`);
+        for (const img of imagesToDelete) {
+          if (img.image_url) {
+            await deleteFromR2(img.image_url);
+          }
+        }
+      }
+
+      // 2. Delete the category's own icon from R2
+      const catToDelete = categories.find(c => c.id === id);
+      if (catToDelete && catToDelete.icon_url) {
+        showMessage('Deleting category icon from Cloudflare R2...');
+        await deleteFromR2(catToDelete.icon_url);
+      }
+
+      // 3. Delete associated background images from Supabase first explicitly
+      await supabase.from('god_images').delete().eq('category', name);
+
+      // 4. Delete the category from Supabase
       const { error: delErr } = await supabase
         .from('god_categories')
         .delete()
         .eq('id', id);
 
       if (delErr) throw delErr;
-      showMessage('Deity category deleted successfully.');
+      showMessage('Deity category and all associated assets deleted from Database & Cloudflare R2.');
       
       // Reset images form to first category if the deleted one was selected
       if (formData.category === name) {
@@ -486,18 +663,32 @@ export default function GodImagesManagerPage() {
   };
 
   const clearForm = () => {
+    if (pendingImagePreview) {
+      URL.revokeObjectURL(pendingImagePreview);
+    }
     setFormData({
       category: categories[0]?.name || '',
       image_url: '',
       sort_order: 0
     });
     setIsEditingId(null);
+    setPendingImageFile(null);
+    setPendingImagePreview('');
+    setImageSizes({ original: 0, compressed: 0 });
+    setUploadProgress(0);
     if (imageInputRef.current) imageInputRef.current.value = '';
   };
 
   const clearCategoryForm = () => {
+    if (pendingIconPreview) {
+      URL.revokeObjectURL(pendingIconPreview);
+    }
     setCategoryFormData(initialCategoryFormState);
     setIsEditingCategoryId(null);
+    setPendingIconFile(null);
+    setPendingIconPreview('');
+    setIconSizes({ original: 0, compressed: 0 });
+    setIconUploadProgress(0);
     if (categoryIconInputRef.current) categoryIconInputRef.current.value = '';
   };
 
@@ -597,42 +788,94 @@ export default function GodImagesManagerPage() {
                       Category Icon Image *
                     </label>
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                      Upload a small image/icon representing this deity (circular avatar format). Aspect ratio 1:1 is recommended.
+                      Upload a small image/icon representing this deity. **Recommended size: 512 × 512 px (1:1 aspect ratio)** for circular avatar layout.
                     </p>
-                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
                       <input 
                         type="file" 
                         accept="image/*" 
                         ref={categoryIconInputRef}
-                        onChange={handleIconUpload}
+                        onChange={handleIconSelect}
+                        disabled={uploadingIcon || compressingIcon}
                         style={{ display: 'none' }}
                       />
                       <button 
                         type="button" 
                         className="btn-secondary" 
-                        disabled={uploadingIcon}
+                        disabled={uploadingIcon || compressingIcon}
                         onClick={() => categoryIconInputRef.current?.click()}
                         style={{ display: 'inline-flex', gap: '8px', alignItems: 'center' }}
                       >
-                        {uploadingIcon ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                        {categoryFormData.icon_url ? 'Change Icon File' : 'Choose Icon File'}
+                        {compressingIcon ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : uploadingIcon ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <Upload size={16} />
+                        )}
+                        {compressingIcon 
+                          ? 'Compressing...' 
+                          : uploadingIcon 
+                          ? 'Uploading...' 
+                          : pendingIconPreview || categoryFormData.icon_url 
+                          ? 'Change Icon File' 
+                          : 'Choose Icon File'}
                       </button>
-                      {categoryFormData.icon_url && (
+                      
+                      {uploadingIcon && (
+                        <span style={{ fontSize: '0.8rem', color: '#ea580c', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          Uploading to R2 ({iconUploadProgress}%)
+                        </span>
+                      )}
+                      
+                      {categoryFormData.icon_url && !pendingIconFile && (
                         <span style={{ fontSize: '0.8rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <Check size={14} /> Uploaded to R2.
+                          <Check size={14} /> Synced to R2.
+                        </span>
+                      )}
+
+                      {pendingIconFile && (
+                        <span style={{ fontSize: '0.8rem', color: '#ea580c', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <AlertTriangle size={14} /> Pending Submit.
                         </span>
                       )}
                     </div>
+
+                    {uploadingIcon && (
+                      <div style={{ marginTop: '8px', width: '100%' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                          <span>R2 Upload Progress</span>
+                          <span>{iconUploadProgress}%</span>
+                        </div>
+                        <div style={{ width: '100%', height: '6px', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                          <div style={{ width: `${iconUploadProgress}%`, height: '100%', backgroundColor: '#ea580c', transition: 'width 0.1s ease-out' }}></div>
+                        </div>
+                      </div>
+                    )}
+
+                    {pendingIconFile && iconSizes.original > 0 && (
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '8px', display: 'flex', gap: '16px' }}>
+                        <span>Original: <strong>{(iconSizes.original / 1024).toFixed(1)} KB</strong></span>
+                        <span>Compressed: <strong style={{ color: '#10b981' }}>{(iconSizes.compressed / 1024).toFixed(1)} KB</strong></span>
+                        <span>Saved: <strong style={{ color: '#10b981' }}>{((1 - iconSizes.compressed / iconSizes.original) * 100).toFixed(0)}%</strong></span>
+                      </div>
+                    )}
                     
-                    {categoryFormData.icon_url && (
+                    {(pendingIconPreview || categoryFormData.icon_url) && (
                       <div style={{ display: 'flex', gap: '12px', marginTop: '12px', alignItems: 'center' }}>
                         <img 
-                          src={categoryFormData.icon_url} 
+                          src={pendingIconPreview || categoryFormData.icon_url} 
                           alt="Category Icon Preview" 
                           style={{ width: '50px', height: '50px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)', backgroundColor: 'rgba(234, 152, 78, 0.2)' }} 
                         />
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '280px' }}>
-                          <strong>CDN Link:</strong> <a href={categoryFormData.icon_url} target="_blank" rel="noreferrer" style={{ color: '#ea580c' }}>Open Icon</a>
+                          {pendingIconFile ? (
+                            <span style={{ color: '#ea580c', fontWeight: 'bold' }}>Local Compressed (Unpublished)</span>
+                          ) : (
+                            <>
+                              <strong>CDN Link:</strong> <a href={categoryFormData.icon_url} target="_blank" rel="noreferrer" style={{ color: '#ea580c' }}>Open Icon</a>
+                            </>
+                          )}
                         </div>
                       </div>
                     )}
@@ -663,10 +906,19 @@ export default function GodImagesManagerPage() {
                     <button 
                       type="submit" 
                       className="btn-primary" 
-                      disabled={uploadingIcon}
+                      disabled={uploadingIcon || compressingIcon}
                     >
-                      <Save size={16} />
-                      {isEditingCategoryId ? 'Update Category' : 'Create Category'}
+                      {uploadingIcon ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" />
+                          Uploading ({iconUploadProgress}%)
+                        </>
+                      ) : (
+                        <>
+                          <Save size={16} />
+                          {isEditingCategoryId ? 'Update Category' : 'Create Category'}
+                        </>
+                      )}
                     </button>
                   </div>
                 </form>
@@ -816,42 +1068,94 @@ export default function GodImagesManagerPage() {
                       Deity Image File *
                     </label>
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                      Choose a high-resolution, centered image of the deity. **Aspect Ratio ~3:5 (e.g. 600 x 1000px)** is best. PNG or transparent background is preferred to blend inside the gate.
+                      Choose a high-resolution, centered image of the deity. **Recommended size: 1000 × 1600 px (5:8 aspect ratio)**. PNG or transparent background is preferred to blend inside the temple gate.
                     </p>
-                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
                       <input 
                         type="file" 
                         accept="image/*" 
                         ref={imageInputRef}
-                        onChange={handleImageUpload}
+                        onChange={handleImageSelect}
+                        disabled={uploadingImage || compressingImage}
                         style={{ display: 'none' }}
                       />
                       <button 
                         type="button" 
                         className="btn-secondary" 
-                        disabled={uploadingImage}
+                        disabled={uploadingImage || compressingImage}
                         onClick={() => imageInputRef.current?.click()}
                         style={{ display: 'inline-flex', gap: '8px', alignItems: 'center' }}
                       >
-                        {uploadingImage ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                        {formData.image_url ? 'Change Image File' : 'Choose Image File'}
+                        {compressingImage ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : uploadingImage ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <Upload size={16} />
+                        )}
+                        {compressingImage 
+                          ? 'Compressing...' 
+                          : uploadingImage 
+                          ? 'Uploading...' 
+                          : pendingImagePreview || formData.image_url 
+                          ? 'Change Image File' 
+                          : 'Choose Image File'}
                       </button>
-                      {formData.image_url && (
+
+                      {uploadingImage && (
+                        <span style={{ fontSize: '0.8rem', color: '#ea580c', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          Uploading to R2 ({uploadProgress}%)
+                        </span>
+                      )}
+
+                      {formData.image_url && !pendingImageFile && (
                         <span style={{ fontSize: '0.8rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <Check size={14} /> Uploaded to R2.
+                          <Check size={14} /> Synced to R2.
+                        </span>
+                      )}
+
+                      {pendingImageFile && (
+                        <span style={{ fontSize: '0.8rem', color: '#ea580c', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <AlertTriangle size={14} /> Pending Submit.
                         </span>
                       )}
                     </div>
+
+                    {uploadingImage && (
+                      <div style={{ marginTop: '8px', width: '100%' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                          <span>R2 Upload Progress</span>
+                          <span>{uploadProgress}%</span>
+                        </div>
+                        <div style={{ width: '100%', height: '6px', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                          <div style={{ width: `${uploadProgress}%`, height: '100%', backgroundColor: '#ea580c', transition: 'width 0.1s ease-out' }}></div>
+                        </div>
+                      </div>
+                    )}
+
+                    {pendingImageFile && imageSizes.original > 0 && (
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '8px', display: 'flex', gap: '16px' }}>
+                        <span>Original: <strong>{(imageSizes.original / 1024).toFixed(1)} KB</strong></span>
+                        <span>Compressed: <strong style={{ color: '#10b981' }}>{(imageSizes.compressed / 1024).toFixed(1)} KB</strong></span>
+                        <span>Saved: <strong style={{ color: '#10b981' }}>{((1 - imageSizes.compressed / imageSizes.original) * 100).toFixed(0)}%</strong></span>
+                      </div>
+                    )}
                     
-                    {formData.image_url && (
+                    {(pendingImagePreview || formData.image_url) && (
                       <div style={{ display: 'flex', gap: '12px', marginTop: '12px', alignItems: 'center' }}>
                         <img 
-                          src={formData.image_url} 
+                          src={pendingImagePreview || formData.image_url} 
                           alt="Deity Preview" 
                           style={{ width: '60px', height: '100px', borderRadius: '6px', objectFit: 'contain', border: '1px solid var(--border)', backgroundColor: 'rgba(234, 152, 78, 0.2)' }} 
                         />
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '280px' }}>
-                          <strong>Public URL:</strong> <a href={formData.image_url} target="_blank" rel="noreferrer" style={{ color: '#ea580c' }}>Open Link</a>
+                          {pendingImageFile ? (
+                            <span style={{ color: '#ea580c', fontWeight: 'bold' }}>Local Compressed (Unpublished)</span>
+                          ) : (
+                            <>
+                              <strong>Public URL:</strong> <a href={formData.image_url} target="_blank" rel="noreferrer" style={{ color: '#ea580c' }}>Open Link</a>
+                            </>
+                          )}
                         </div>
                       </div>
                     )}
@@ -882,10 +1186,19 @@ export default function GodImagesManagerPage() {
                     <button 
                       type="submit" 
                       className="btn-primary" 
-                      disabled={uploadingImage || categories.length === 0}
+                      disabled={uploadingImage || compressingImage || categories.length === 0}
                     >
-                      <Save size={16} />
-                      {isEditingId ? 'Update Details' : 'Publish Image'}
+                      {uploadingImage ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" />
+                          Uploading ({uploadProgress}%)
+                        </>
+                      ) : (
+                        <>
+                          <Save size={16} />
+                          {isEditingId ? 'Update Details' : 'Publish Image'}
+                        </>
+                      )}
                     </button>
                   </div>
                 </form>
@@ -1069,7 +1382,13 @@ export default function GodImagesManagerPage() {
                   position: 'absolute',
                   top: '18%'
                 }}>
-                  {selectedPreviewImage ? (
+                  {pendingImagePreview ? (
+                    <img 
+                      src={pendingImagePreview} 
+                      alt="Pending Simulator Deity"
+                      style={getPreviewStyle(formData.category)}
+                    />
+                  ) : selectedPreviewImage ? (
                     <img 
                       src={selectedPreviewImage.image_url} 
                       alt="Active Simulator Deity"
