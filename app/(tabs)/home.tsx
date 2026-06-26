@@ -1396,13 +1396,6 @@ export default function HomeScreen() {
   // Refresh dynamic data every time the screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      // Force-reset scroll position and expand card on screen entry
-      mainScrollRef.current?.scrollTo({ y: 0, animated: false });
-      scrollY.setValue(0);
-      currentScrollYRef.current = 0;
-      setIsCollapsed(false);
-      isExpandingRef.current = false;
-
       loadActiveHero();
       loadOneRupeePoojas();
       loadLifeProblems();

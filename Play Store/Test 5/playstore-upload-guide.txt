@@ -1,0 +1,64 @@
+MANTRA PUJA - PLAY STORE UPLOAD GUIDE
+
+Follow these steps to upload and publish the Version 5.0.0 update to the Google Play Store:
+
+---
+
+STEP 1: Log in and Select the Application
+1. Log in to the Google Play Console (https://play.google.com/console).
+2. Select "Mantra Puja" from your app list.
+
+---
+
+STEP 2: Create a Production Release
+1. In the left navigation menu, scroll down to the "Release" section.
+2. Click on "Production" (or "Testing" if publishing to an internal/closed track first).
+3. Click the "Create new release" button at the top right of the page.
+
+---
+
+STEP 3: Upload the App Bundle
+1. In the "App bundles" drag-and-drop zone, upload the signed AAB file:
+   File Path: Play Store/Test 5/app-release.aab
+2. Wait for the upload to complete and for Google to process the bundle.
+3. Verify that the console displays:
+   - Version Code: 5
+   - Version Name: 5.0.0
+   - Package Name: com.mantrapuja.official
+
+---
+
+STEP 4: Configure Release Details
+1. Google Play Console will automatically populate the Release Name as "5.0.0 (5)" or similar.
+2. Under "Release Notes", copy and paste the contents of:
+   File Path: Play Store/Test 5/release-notes.txt
+   (Include support for both English and translated locales as configured).
+
+---
+
+STEP 5: Check and Update Store Listing Assets (If Needed)
+If you need to update graphics, navigate to "Grow" > "Store presence" > "Main store listing":
+1. App Icon: Upload the 512x512 PNG found in assets.
+2. Feature Graphic: Upload the 1024x500 PNG found in assets.
+3. Screenshots: Upload screenshots (screenshot-1.png to screenshot-7.png) to Phone and Tablet tabs.
+4. Support URLs: Verify URLs in "App content" / "Store settings":
+   - Privacy Policy: https://www.mantrapuja.com/privacy-policy
+   - Terms: https://www.mantrapuja.com/terms-and-conditions
+   - Refund Policy: https://www.mantrapuja.com/refund-policy
+
+---
+
+STEP 6: Review and Rollout
+1. Click "Save" at the bottom right.
+2. Click "Review release" at the bottom right.
+3. Confirm there are no blocking errors (Warnings about de-obfuscation files can be safely ignored or resolved by uploading native debug symbols).
+4. Click "Start rollout to Production" (or click "Start rollout to Testing" if on a pre-release track).
+
+---
+
+Verification Checklist:
+[ ] Signed with existing keystore 'my-release-key.keystore'
+[ ] Alias matches 'my-key-alias'
+[ ] Version Name is '5.0.0' and Version Code is '5'
+[ ] Package Name is exactly 'com.mantrapuja.official'
+[ ] Debug signatures are NOT present in the final binary

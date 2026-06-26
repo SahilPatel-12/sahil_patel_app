@@ -75,6 +75,8 @@ interface Astrologer {
   isOnline: boolean;
   title: string;
   bio: string;
+  avatar?: any;
+  hasProfilePhoto?: boolean;
   dbId?: string;
 }
 
@@ -306,7 +308,8 @@ export default function AstroScreen() {
             const readingsCount = a.readings_count || (experience * 240 + (idx * 37) % 100);
 
             let avatar = require("../../assets/astrology/pandit_ji_avatar.png");
-            if (a.profile_photo && (a.profile_photo.startsWith('http://') || a.profile_photo.startsWith('https://'))) {
+            const hasProfilePhoto = !!(a.profile_photo && (a.profile_photo.startsWith('http://') || a.profile_photo.startsWith('https://') || a.profile_photo.startsWith('http') || a.profile_photo.startsWith('https')));
+            if (hasProfilePhoto) {
               avatar = { uri: a.profile_photo };
             }
 
@@ -315,6 +318,7 @@ export default function AstroScreen() {
               dbId: a.id,
               name: a.full_name || "Vedic Astrologer",
               avatar: avatar,
+              hasProfilePhoto: hasProfilePhoto,
               rating: rating,
               experience: experience,
               readingsCount: readingsCount,
@@ -955,9 +959,13 @@ export default function AstroScreen() {
 
                   <View style={s.profileRow}>
                     <View style={s.avatarContainer}>
-                      <LinearGradient colors={["#8b5cf6", "#6d28d9"]} style={s.placeholderAvatar}>
-                        <Text style={{ fontSize: 30 }}>🔮</Text>
-                      </LinearGradient>
+                      {astro.hasProfilePhoto ? (
+                        <Image source={astro.avatar} style={s.avatarImage} resizeMode="cover" />
+                      ) : (
+                        <LinearGradient colors={["#8b5cf6", "#6d28d9"]} style={s.placeholderAvatar}>
+                          <Text style={{ fontSize: 30 }}>🔮</Text>
+                        </LinearGradient>
+                      )}
                       <View style={s.ratingBadge}>
                         <Ionicons name="star" size={10} color="#f97316" />
                         <Text style={s.ratingText}>{astro.rating}</Text>
@@ -1268,9 +1276,13 @@ export default function AstroScreen() {
 
               <ScrollView style={s.drawerScroll} showsVerticalScrollIndicator={false}>
                 <View style={{ alignItems: "center", marginTop: 10 }}>
-                  <LinearGradient colors={["#8b5cf6", "#6d28d9"]} style={s.drawerAvatar}>
-                    <Text style={{ fontSize: 34 }}>🔮</Text>
-                  </LinearGradient>
+                  {selectedAstro.hasProfilePhoto ? (
+                    <Image source={selectedAstro.avatar} style={s.drawerAvatar} resizeMode="cover" />
+                  ) : (
+                    <LinearGradient colors={["#8b5cf6", "#6d28d9"]} style={s.drawerAvatar}>
+                      <Text style={{ fontSize: 34 }}>🔮</Text>
+                    </LinearGradient>
+                  )}
                   <Text style={s.drawerName}>{selectedAstro.name}</Text>
                   <Text style={s.drawerTitle}>{t(selectedAstro.title)}</Text>
                 </View>

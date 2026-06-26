@@ -134,11 +134,26 @@ export default function AllPujasScreen() {
   const { cart, handleAddToCart, handleIncrement, handleDecrement, totalCartCount } = useCart();
   const [selectedCategory, setSelectedCategory] = React.useState(category || 'All');
 
+  const categoryScrollRef = React.useRef<ScrollView>(null);
+  const categoryLayouts = React.useRef<{ [key: string]: number }>({});
+
   React.useEffect(() => {
     if (category) {
       setSelectedCategory(category);
     }
   }, [category]);
+
+  React.useEffect(() => {
+    const x = categoryLayouts.current[selectedCategory];
+    if (x !== undefined) {
+      setTimeout(() => {
+        categoryScrollRef.current?.scrollTo({
+          x: Math.max(0, x - 24),
+          animated: true,
+        });
+      }, 50);
+    }
+  }, [selectedCategory]);
   const [generalPujas, setGeneralPujas] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [viewAllSettings, setViewAllSettings] = React.useState({
@@ -433,6 +448,7 @@ export default function AllPujasScreen() {
 
         {/* Categories Filter */}
         <ScrollView 
+          ref={categoryScrollRef}
           horizontal 
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoryScroll}
@@ -441,6 +457,18 @@ export default function AllPujasScreen() {
           {dynamicCategories.map((cat) => (
             <TouchableOpacity
               key={cat}
+              onLayout={(event) => {
+                const x = event.nativeEvent.layout.x;
+                categoryLayouts.current[cat] = x;
+                if (cat === selectedCategory) {
+                  setTimeout(() => {
+                    categoryScrollRef.current?.scrollTo({
+                      x: Math.max(0, x - 24),
+                      animated: true,
+                    });
+                  }, 100);
+                }
+              }}
               style={[styles.categoryPill, selectedCategory === cat && styles.categoryPillActive]}
               onPress={() => setSelectedCategory(cat)}
               activeOpacity={0.8}

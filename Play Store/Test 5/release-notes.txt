@@ -1,0 +1,19 @@
+Mantra Puja Release Notes - Version 5.0.0 (Build 5)
+
+What's New in this Release:
+
+1. Astrologer Consultation Improvements:
+   - Added block pricing options for astrologers (e.g. 40 or 100 coins for a 5-minute session).
+   - Dynamic real-time session countdown timer inside the astrologer chat.
+   - Smart renewal screen that prompts the user to add more coins when the session is ending, terminating the chat gracefully if they decline.
+   - Cleaned up the astrologer view by removing calls and retaining only chat-only consultation capabilities.
+
+2. Dynamic Layout & Responsiveness:
+   - Completely responsive Panchang and Daily Rashifal card layouts. Container heights now measure and scale automatically according to screen dimensions and content, eliminating large layout gaps and avoiding text clipping.
+
+3. Shop E-commerce Category Link fixes:
+   - Clicks on home screen product categories (e.g., Bracelet, Pyrite, Rudraksha) now route directly to the store page with the correct filter tab active instead of defaulting to the general 'All' view.
+
+4. Performance & Stability:
+   - Full compatibility optimizations for SDK 54.
+   - Realtime database sync reliability enhancements.

@@ -10,9 +10,11 @@ import Animated, {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLanguage } from '../context/LanguageContext';
 import { safeStorage } from '../services/storage';
 import { supabase } from '../services/supabase';
+
 
 const { width, height } = Dimensions.get('window');
 const DRAWER_WIDTH = width * 0.8;
@@ -174,25 +176,36 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>12</Text>
-              <Text style={styles.statLabel}>{t('Puja Done')}</Text>
-            </View>
+          <View style={styles.statsContainer}>
             <TouchableOpacity 
-              style={[styles.statItem, styles.statBorder]}
+              style={styles.statsCard}
+              activeOpacity={0.9}
               onPress={() => {
                 onClose();
                 router.push('/wallet');
               }}
             >
-              <Text style={styles.statValue}>{walletBalance}</Text>
-              <Text style={styles.statLabel}>{t('Coins')}</Text>
+              <LinearGradient
+                colors={['#ea580c', '#d97706']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.statsGradient}
+              >
+                <View style={styles.coinIconContainer}>
+                  <Ionicons name="wallet" size={22} color="#fef08a" />
+                </View>
+                <View style={styles.statsInfo}>
+                  <Text style={styles.coinLabel}>{t('Spiritual Wallet')}</Text>
+                  <View style={styles.coinValueRow}>
+                    <Text style={styles.coinValue}>{walletBalance}</Text>
+                    <Text style={styles.coinText}>{t('Coins')}</Text>
+                  </View>
+                </View>
+                <View style={styles.arrowIconContainer}>
+                  <Ionicons name="chevron-forward" size={18} color="#ffffff" />
+                </View>
+              </LinearGradient>
             </TouchableOpacity>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>4.8</Text>
-              <Text style={styles.statLabel}>{t('Rating')}</Text>
-            </View>
           </View>
 
           <View style={styles.itemsContainer}>
@@ -345,36 +358,68 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 40,
   },
-  statsRow: {
-    flexDirection: 'row',
-    backgroundColor: '#f8fafc',
+  statsContainer: {
     marginHorizontal: 16,
-    borderRadius: 16,
-    paddingVertical: 16,
     marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  statItem: {
-    flex: 1,
+  statsCard: {
+    width: '100%',
+  },
+  statsGradient: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
   },
-  statBorder: {
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: '#e2e8f0',
+  coinIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
-  statValue: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#1e293b',
+  statsInfo: {
+    flex: 1,
   },
-  statLabel: {
+  coinLabel: {
     fontSize: 10,
-    color: '#94a3b8',
+    color: '#ffedd5',
     fontWeight: '700',
     textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  coinValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginTop: 2,
+  },
+  coinValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  coinText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fef08a',
+    marginLeft: 4,
+  },
+  arrowIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   sectionTitle: {
     fontSize: 11,

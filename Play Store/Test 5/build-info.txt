@@ -1,0 +1,26 @@
+Build Information:
+
+Build Date: Friday, Jun 26, 2026
+Build Time: 11:45 IST
+
+Build Environment:
+- Java Version: OpenJDK 17.0.18 (Zulu17.64+15-CA)
+- Node.js Version: 22.22.3
+- npm Version: 10.9.8
+- Android SDK Path: /Users/sahilpatel/Library/Android/sdk
+- Build Tool: Gradle 8.14.3
+
+Build Outputs:
+- APK File Name: app-release.apk
+- APK File Size: 162,219,670 bytes (154.7 MB)
+- APK Path: Play Store/Test 5/app-release.apk
+
+- AAB File Name: app-release.aab
+- AAB File Size: 130,556,455 bytes (124.5 MB)
+- AAB Path: Play Store/Test 5/app-release.aab
+
+- Keystore File Name: upload-keystore.jks (copied from my-release-key.keystore)
+- Keystore File Size: 2,708 bytes
+- Keystore Path: Play Store/Test 5/upload-keystore.jks
+
+Status: SUCCESSFUL
