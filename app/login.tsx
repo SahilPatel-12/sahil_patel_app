@@ -15,6 +15,7 @@ import {
   Modal,
   FlatList
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,7 +33,6 @@ import { useLanguage } from '../context/LanguageContext';
 import { sendWhatsAppOTP, getWhatsAppApiKey } from '../services/whatsapp';
 import { safeStorage } from '../services/storage';
 import { supabase } from '../services/supabase';
-import * as Clipboard from 'expo-clipboard';
 
 const { width, height } = Dimensions.get('window');
 
@@ -170,9 +170,6 @@ export default function LoginScreen() {
     
     const checkClipboard = async () => {
       try {
-        const hasString = await Clipboard.hasStringAsync();
-        if (!hasString || !isActive) return;
-        
         const text = await Clipboard.getStringAsync();
         if (!text || !isActive) return;
         
@@ -182,7 +179,7 @@ export default function LoginScreen() {
           const matchedOtp = match[0];
           // If we haven't already filled this OTP
           if (matchedOtp !== otp) {
-            console.log('[Login] Auto-filling and verifying OTP from clipboard:', matchedOtp);
+            console.log('[Login] Auto-filling and verifying OTP from native clipboard:', matchedOtp);
             setOtp(matchedOtp);
             verifyOtpCode(matchedOtp, generatedOtp);
           }
@@ -220,18 +217,15 @@ export default function LoginScreen() {
           return;
         }
 
-        // 2. Check clipboard
-        const hasString = await Clipboard.hasStringAsync();
-        if (hasString) {
-          const text = await Clipboard.getStringAsync();
-          if (text) {
-            // Match MPXXXXXX or code=MPXXXXXX or refer?code=MPXXXXXX
-            const match = text.match(/code=([a-zA-Z0-9_-]+)/i) || text.match(/\b(MP[a-zA-Z0-9]{6})\b/i);
-            if (match && match[1]) {
-              const matchedCode = match[1].toUpperCase();
-              console.log('[Login] Auto-filling referral code from clipboard:', matchedCode);
-              setReferredByCode(matchedCode);
-            }
+        // 2. Check native clipboard
+        const text = await Clipboard.getStringAsync();
+        if (text) {
+          // Match MPXXXXXX or code=MPXXXXXX or refer?code=MPXXXXXX
+          const match = text.match(/code=([a-zA-Z0-9_-]+)/i) || text.match(/\b(MP[a-zA-Z0-9]{6})\b/i);
+          if (match && match[1]) {
+            const matchedCode = match[1].toUpperCase();
+            console.log('[Login] Auto-filling referral code from native clipboard:', matchedCode);
+            setReferredByCode(matchedCode);
           }
         }
       } catch (err) {

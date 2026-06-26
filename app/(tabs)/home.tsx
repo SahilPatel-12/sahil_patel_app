@@ -29,6 +29,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCart } from '../../context/CartContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { usePlayback } from '../../context/PlaybackContext';
 import { requestAstro } from '../../services/api';
 import { supabase } from '../../services/supabase';
 import { safeStorage } from '../../services/storage';
@@ -473,6 +474,9 @@ export default function HomeScreen() {
   const { cart, handleAddToCart, handleIncrement, handleDecrement } = useCart();
   const { t } = useLanguage();
 
+  // Consume Global Playback Context
+  const { player, status, activeTrack, playTrack, togglePlay } = usePlayback();
+
   const [heroData, setHeroData] = React.useState<any>(null);
   const [isHeroLoading, setIsHeroLoading] = React.useState(true);
   const [oneRupeeItems, setOneRupeeItems] = React.useState<any[]>([]);
@@ -483,9 +487,10 @@ export default function HomeScreen() {
   const [activeReview, setActiveReview] = React.useState<any>(null);
   const [dbBanners, setDbBanners] = React.useState<any[]>([]);
 
-  const EXPANDED_HEIGHT = 645;
+  const [detailsHeight, setDetailsHeight] = React.useState(420);
   const COLLAPSED_HEIGHT = 188;
-  const COLLAPSE_THRESHOLD = EXPANDED_HEIGHT - COLLAPSED_HEIGHT;
+  const EXPANDED_HEIGHT = COLLAPSED_HEIGHT + detailsHeight;
+  const COLLAPSE_THRESHOLD = detailsHeight;
 
   const [panchangData, setPanchangData] = React.useState<any>(null);
   const panchangDataRef = React.useRef<any>(null);
@@ -558,10 +563,15 @@ export default function HomeScreen() {
   const weekdayRec = getWeekdayRecommendation(currentDayName);
   const isCollapsedRef = React.useRef(false);
   const isExpandingRef = React.useRef(false);
+  const collapseThresholdRef = React.useRef(COLLAPSE_THRESHOLD);
 
   React.useEffect(() => {
     isCollapsedRef.current = isCollapsed;
   }, [isCollapsed]);
+
+  React.useEffect(() => {
+    collapseThresholdRef.current = COLLAPSE_THRESHOLD;
+  }, [COLLAPSE_THRESHOLD]);
 
   React.useEffect(() => {
     loadDailyDaan(userRashi, currentDayName);
@@ -591,9 +601,10 @@ export default function HomeScreen() {
       onPanResponderRelease: (evt, gestureState) => {
         if (!isCollapsedRef.current) {
           const y = currentScrollYRef.current;
-          if (y > 0 && y < COLLAPSE_THRESHOLD) {
-            if (y > COLLAPSE_THRESHOLD / 2 || gestureState.dy < -50) {
-              mainScrollRef.current?.scrollTo({ y: COLLAPSE_THRESHOLD, animated: true });
+          const threshold = collapseThresholdRef.current;
+          if (y > 0 && y < threshold) {
+            if (y > threshold / 2 || gestureState.dy < -50) {
+              mainScrollRef.current?.scrollTo({ y: threshold, animated: true });
             } else {
               mainScrollRef.current?.scrollTo({ y: 0, animated: true });
             }
@@ -1135,7 +1146,7 @@ export default function HomeScreen() {
     } else {
       mainScrollRef.current?.scrollTo({ y: COLLAPSE_THRESHOLD, animated: true });
     }
-  }, [isCollapsed]);
+  }, [isCollapsed, COLLAPSE_THRESHOLD]);
 
   const handleTogglePanchangRef = React.useRef(handleTogglePanchang);
   React.useEffect(() => {
@@ -1337,8 +1348,8 @@ export default function HomeScreen() {
     }
   }, []);
 
-  const handleListenMantra = React.useCallback(() => {
-    const match = allBhajans.find((b: any) => {
+  const getMantraTrack = React.useCallback(() => {
+    return allBhajans.find((b: any) => {
       const title = (b.title || '').toLowerCase();
       const recBhajan = (weekdayRec.bhajan || '').toLowerCase();
       const recMantra = (weekdayRec.mantra || '').toLowerCase();
@@ -1346,19 +1357,41 @@ export default function HomeScreen() {
       
       return title.includes(recBhajan) || title.includes(recMantra) || (title.includes('mantra') && title.includes(recBhagwan));
     });
-    
+  }, [allBhajans, weekdayRec]);
+
+  const handleListenMantra = React.useCallback(() => {
+    const match = getMantraTrack();
     if (match) {
-      router.push({
-        pathname: '/music',
-        params: { playTrackId: match.id }
-      });
+      const isCurrentActive = activeTrack && activeTrack.id === match.id;
+      if (isCurrentActive) {
+        togglePlay();
+      } else {
+        playTrack(match);
+      }
     } else {
       router.push({
         pathname: '/music',
         params: { search: weekdayRec.bhajan || weekdayRec.mantra }
       });
     }
-  }, [allBhajans, weekdayRec]);
+  }, [getMantraTrack, activeTrack, playTrack, togglePlay, weekdayRec]);
+
+  const handlePlayPauseBhajan = React.useCallback(() => {
+    if (dailyBhajan) {
+      const isCurrentActive = activeTrack && activeTrack.id === dailyBhajan.id;
+      if (isCurrentActive) {
+        togglePlay();
+      } else {
+        playTrack(dailyBhajan);
+      }
+    } else {
+      router.push('/music');
+    }
+  }, [dailyBhajan, activeTrack, playTrack, togglePlay]);
+
+  const mantraTrack = React.useMemo(() => getMantraTrack(), [getMantraTrack]);
+  const isMantraPlaying = !!(activeTrack && mantraTrack && activeTrack.id === mantraTrack.id && status.playing);
+  const isBhajanPlaying = !!(activeTrack && dailyBhajan && activeTrack.id === dailyBhajan.id && status.playing);
 
   // Refresh dynamic data every time the screen comes into focus
   useFocusEffect(
@@ -1518,7 +1551,7 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
       >
         {/* Spacer to reserve space for the absolutely-positioned Panchang Card */}
-        <View style={{ height: isCollapsed ? COLLAPSED_HEIGHT + 4 : EXPANDED_HEIGHT + 4 }} />
+        <View style={{ height: isCollapsed ? COLLAPSED_HEIGHT + 24 : EXPANDED_HEIGHT + 24 }} />
 
         {/* Horizontal Quick Actions Row */}
         <View style={styles.actionsContainer}>
@@ -2030,7 +2063,16 @@ export default function HomeScreen() {
               ]}
             >
               <Animated.View style={{ opacity: panchangOpacity, width: '100%' }}>
-                <View style={{ width: '100%', paddingHorizontal: 4 }}>
+                <View 
+                  style={{ width: '100%', paddingHorizontal: 4 }}
+                  onLayout={(event) => {
+                    const { height } = event.nativeEvent.layout;
+                    const paddedHeight = height + 12;
+                    if (height > 0 && Math.abs(detailsHeight - paddedHeight) > 1) {
+                      setDetailsHeight(paddedHeight);
+                    }
+                  }}
+                >
                   {/* Personal Daily Forecast (only if rashiForecast is available) */}
                   {rashiForecast && (
                     <View style={styles.horoscopeForecastCard}>
@@ -2245,8 +2287,8 @@ export default function HomeScreen() {
                           activeOpacity={0.8}
                           onPress={handleListenMantra}
                         >
-                          <Ionicons name="play" size={13} color="#ffffff" style={{ marginRight: 3 }} />
-                          <Text style={styles.mantraButtonListenTextHalf}>{t("Listen")}</Text>
+                          <Ionicons name={isMantraPlaying ? "pause" : "play"} size={13} color="#ffffff" style={{ marginRight: 3 }} />
+                          <Text style={styles.mantraButtonListenTextHalf}>{isMantraPlaying ? t("Pause") : t("Listen")}</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -2270,18 +2312,11 @@ export default function HomeScreen() {
                         activeOpacity={0.8}
                         onPress={(e) => {
                           e.stopPropagation();
-                          if (dailyBhajan) {
-                            router.push({
-                              pathname: '/music',
-                              params: { playTrackId: dailyBhajan.id }
-                            });
-                          } else {
-                            router.push('/music');
-                          }
+                          handlePlayPauseBhajan();
                         }}
                       >
-                        <Ionicons name="play" size={13} color="#ffffff" style={{ marginRight: 3 }} />
-                        <Text style={styles.bhajanPlayText}>{t("Play Bhajan")}</Text>
+                        <Ionicons name={isBhajanPlaying ? "pause" : "play"} size={13} color="#ffffff" style={{ marginRight: 3 }} />
+                        <Text style={styles.bhajanPlayText}>{isBhajanPlaying ? t("Pause") : t("Play Bhajan")}</Text>
                       </TouchableOpacity>
                     </TouchableOpacity>
                   </View>
@@ -3985,7 +4020,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fffdf9',
     paddingHorizontal: 8,
     paddingTop: 6,
-    paddingBottom: 0,
+    paddingBottom: 8,
     overflow: 'hidden',
   },
   choghadiyaViewAllCard: {

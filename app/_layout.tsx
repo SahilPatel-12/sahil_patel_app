@@ -5,6 +5,7 @@ import { useFonts, Outfit_400Regular, Outfit_600SemiBold, Outfit_700Bold, Outfit
 import { DrawerProvider } from "../context/DrawerContext";
 import { CartProvider } from "../context/CartContext";
 import { LanguageProvider } from "../context/LanguageContext";
+import { PlaybackProvider } from "../context/PlaybackContext";
 import * as Linking from 'expo-linking';
 import { safeStorage } from '../services/storage';
 import { registerForPushNotificationsAsync, registerNotificationListeners } from '../services/notifications';
@@ -73,27 +74,29 @@ export default function RootLayout() {
   // Instead, render the stack but hide it or show nothing until ready
   return (
     <LanguageProvider>
-      <CartProvider>
-        <DrawerProvider>
-          {loaded || error ? (
-            <Stack screenOptions={{ headerShown: false }} initialRouteName="index">
-              <Stack.Screen name="index" />
-              <Stack.Screen name="login" />
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="puja_detail" />
-              <Stack.Screen name="daan_detail" />
-              <Stack.Screen name="settings_detail" />
-              <Stack.Screen name="notifications" />
-              <Stack.Screen name="share" />
-              <Stack.Screen name="rashi" />
-              <Stack.Screen name="kundli" />
-              <Stack.Screen name="panchang" />
-              <Stack.Screen name="book_pandit_puja" />
-              <Stack.Screen name="astrologer_chat" />
-            </Stack>
-          ) : null}
-        </DrawerProvider>
-      </CartProvider>
+      <PlaybackProvider>
+        <CartProvider>
+          <DrawerProvider>
+            {loaded || error ? (
+              <Stack screenOptions={{ headerShown: false }} initialRouteName="index">
+                <Stack.Screen name="index" />
+                <Stack.Screen name="login" />
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="puja_detail" />
+                <Stack.Screen name="daan_detail" />
+                <Stack.Screen name="settings_detail" />
+                <Stack.Screen name="notifications" />
+                <Stack.Screen name="share" />
+                <Stack.Screen name="rashi" />
+                <Stack.Screen name="kundli" />
+                <Stack.Screen name="panchang" />
+                <Stack.Screen name="book_pandit_puja" />
+                <Stack.Screen name="astrologer_chat" />
+              </Stack>
+            ) : null}
+          </DrawerProvider>
+        </CartProvider>
+      </PlaybackProvider>
     </LanguageProvider>
   );
 }

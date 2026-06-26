@@ -72,6 +72,5 @@ ALTER TABLE public.kundlis ENABLE ROW LEVEL SECURITY;
 
 -- Allow anonymous select/upsert
 DROP POLICY IF EXISTS "Allow anon read access to kundlis" ON public.kundlis;
-CREATE POLICY "Allow anon read access to kundlis" ON public.kundlis FOR SELECT TO anon USING (true);
-DROP POLICY IF EXISTS "Allow anon insert/update to kundlis" ON public.kundlis;
+CREATE POLICY "Allow anon read access to kundlis" ON public.kundlis FOR SELECT TO anon USING (true);DROP POLICY IF EXISTS "Allow anon insert/update to kundlis" ON public.kundlis;
 CREATE POLICY "Allow anon insert/update to kundlis" ON public.kundlis FOR ALL TO anon USING (true);

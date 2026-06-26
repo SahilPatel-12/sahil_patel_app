@@ -13,9 +13,9 @@ import { useLanguage } from '../context/LanguageContext';
 
 const TABS = [
   { name: 'home', label: 'Home', icon: 'home' },
-  { name: 'puja', label: 'Puja', icon: 'sparkles' },
-  { name: 'god', label: 'Darshan', icon: 'star' },
-  { name: 'astro', label: 'Astro', icon: 'moon' },
+  { name: 'puja', label: 'Puja', icon: 'flame' },
+  { name: 'god', label: 'Darshan', icon: 'flower' },
+  { name: 'astro', label: 'Astro', icon: 'planet' },
   { name: 'music', label: 'Music', icon: 'musical-notes' },
 ];
 

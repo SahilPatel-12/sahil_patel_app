@@ -23,6 +23,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { usePlayback } from '../../context/PlaybackContext';
 import { bhajanSupabase } from '../../services/bhajanSupabase';
 import { supabase } from '../../services/supabase';
 import { useLocalSearchParams } from 'expo-router';
@@ -57,11 +58,24 @@ export default function MusicScreen() {
   const { t } = useLanguage();
   const { playTrackId, search } = useLocalSearchParams<{ playTrackId?: string; search?: string }>();
 
+  // Consume Global Playback Context
+  const {
+    player,
+    status,
+    tracks,
+    setTracks,
+    activeTrackIndex,
+    setActiveTrackIndex,
+    activeTrack,
+    playbackSpeed,
+    setPlaybackSpeed,
+    playerVolume,
+    setPlayerVolume,
+    playTrack
+  } = usePlayback();
+
   // Dynamic Chants and Categories state
-  const [tracks, setTracks] = useState<any[]>([]);
   const [categories, setCategories] = useState<{name: string, icon_url?: string}[]>([{ name: 'All' }]);
-  const [activeTrackIndex, setActiveTrackIndex] = useState(0);
-  const activeTrack = tracks[activeTrackIndex];
   
   const [lyricIndex, setLyricIndex] = useState(0);
   const [activeCategory, setActiveCategory] = useState<string>('All');
@@ -86,8 +100,6 @@ export default function MusicScreen() {
   const sliderWidthRef = useRef(0);
 
   const [waveHeights, setWaveHeights] = useState([8, 12, 16, 10, 14, 18, 12, 8, 14, 10, 16, 12, 18, 14, 10, 8]);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
-  const [playerVolume, setPlayerVolume] = useState(1.0);
 
   // Bell count
   const [bellCount, setBellCount] = useState(0);
@@ -252,9 +264,7 @@ export default function MusicScreen() {
     });
   };
 
-  // Expo Audio Setup
-  const player = useAudioPlayer(require('../../assets/Sound/bell_sound.mp3'));
-  const status = useAudioPlayerStatus(player);
+  // Global player and status are now retrieved from usePlayback() context
 
   // Run visualizer bars loop
   useEffect(() => {
@@ -363,16 +373,13 @@ export default function MusicScreen() {
     loadData();
   }, []);
 
-  const isInitialMount = useRef(true);
-
   // Handle auto-playing from navigation parameters (like Bhajan of the Day card)
   useEffect(() => {
     if (playTrackId && tracks.length > 0) {
       const idx = tracks.findIndex(t => t.id === playTrackId);
       if (idx !== -1) {
         console.log(`[Music Screen] Navigation play parameter detected: track ${playTrackId} at index ${idx}. Auto-playing...`);
-        isInitialMount.current = false;
-        setActiveTrackIndex(idx);
+        playTrack(tracks[idx]);
         setIsPlayerModalVisible(true);
         setSelectedDetailCategory(null);
       }
@@ -394,29 +401,11 @@ export default function MusicScreen() {
       );
       if (idx !== -1) {
         console.log(`[Music Screen] Auto-playing first search result at index ${idx}`);
-        isInitialMount.current = false;
-        setActiveTrackIndex(idx);
+        playTrack(tracks[idx]);
         setIsPlayerModalVisible(true);
       }
     }
   }, [search, tracks]);
-
-  // Handle Track Source Swap
-  useEffect(() => {
-    if (activeTrack && activeTrack.url) {
-      player.replace(activeTrack.url);
-      player.shouldCorrectPitch = true;
-      player.setPlaybackRate(playbackSpeed);
-      player.volume = playerVolume;
-      
-      // Auto-advance/autoplay only after initial mount
-      if (isInitialMount.current) {
-        isInitialMount.current = false;
-      } else {
-        player.play();
-      }
-    }
-  }, [activeTrackIndex, tracks, playbackSpeed, playerVolume]);
 
   // Handle track auto-advance when finished
   useEffect(() => {

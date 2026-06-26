@@ -538,7 +538,7 @@ export default function AstroScreen() {
 
   const handleStartConsultation = (astro: Astrologer, type: "chat" | "call") => {
     setSelectedAstro(astro);
-    setConsultType(type);
+    setConsultType("chat"); // Force to chat-only
   };
 
   const handleInitializeCall = async () => {
@@ -549,55 +549,102 @@ export default function AstroScreen() {
     if (!selectedAstro) return;
 
     const currentAstro = selectedAstro;
-    const currentType = consultType;
 
     setSelectedAstro(null);
     setConsultType(null);
 
-    if (currentType === "chat") {
-      try {
-        setConnectingModal(true);
-        
-        const dateStr = new Date().toISOString().split("T")[0];
-        const timeStr = new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit" });
-
-        const { data, error } = await supabase
-          .from("astrologer_bookings")
-          .insert({
-            astrologer_id: currentAstro.dbId,
-            user_id: user.id || user.user_id,
-            devotee_name: user.name || devoteeName || "Devotee",
-            devotee_phone: user.phone || phone || "0000000000",
-            booking_date: dateStr,
-            booking_time: timeStr,
-            consult_type: "chat",
-            status: "Active"
-          })
-          .select()
-          .single();
-
-        setConnectingModal(false);
-
-        if (error) {
-          throw error;
-        }
-
-        if (data) {
-          router.push({
-            pathname: "/astrologer_chat",
-            params: {
-              bookingId: data.id,
-              astrologerId: currentAstro.dbId
-            }
-          });
-        }
-      } catch (err: any) {
-        setConnectingModal(false);
-        console.error("Error creating astrologer booking:", err);
-        Alert.alert(t("Booking Failed"), err.message || t("Could not start consultation. Please try again."));
-      }
-    } else {
+    try {
       setConnectingModal(true);
+
+      // 1. Fetch user's wallet balance
+      const { data: wallet, error: walletErr } = await supabase
+        .from("user_wallets")
+        .select("balance")
+        .eq("user_id", user.id || user.user_id)
+        .single();
+
+      if (walletErr && walletErr.code !== 'PGRST116') {
+        throw new Error(t("Could not verify wallet balance."));
+      }
+
+      const currentBalance = wallet ? wallet.balance : 0;
+      const chargeAmount = currentAstro.chargePerMin;
+
+      // 2. Insufficient balance validation
+      if (currentBalance < chargeAmount) {
+        setConnectingModal(false);
+        Alert.alert(
+          t("Insufficient Balance"),
+          `${t("You need at least")} ${chargeAmount} ${t("coins to start a 5-minute chat session. Your current balance is")} ${currentBalance} ${t("coins.")}`,
+          [
+            { text: t("Cancel"), style: "cancel" },
+            { text: t("Add Coins"), onPress: () => router.push("/wallet") }
+          ]
+        );
+        return;
+      }
+
+      // 3. Deduct first block's fee from user_wallets
+      const { error: deductErr } = await supabase
+        .from("user_wallets")
+        .update({ balance: currentBalance - chargeAmount })
+        .eq("user_id", user.id || user.user_id);
+
+      if (deductErr) {
+        throw new Error(t("Failed to process coin deduction. Please try again."));
+      }
+
+      // 4. Log deduction transaction in coin_transactions
+      const { error: txErr } = await supabase
+        .from("coin_transactions")
+        .insert({
+          user_id: user.id || user.user_id,
+          amount: -chargeAmount,
+          type: "astrologer_chat"
+        });
+
+      if (txErr) {
+        console.warn("[AstroScreen] Failed to log transaction in ledger:", txErr.message);
+      }
+
+      // 5. Insert active booking details
+      const dateStr = new Date().toISOString().split("T")[0];
+      const timeStr = new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit" });
+
+      const { data, error } = await supabase
+        .from("astrologer_bookings")
+        .insert({
+          astrologer_id: currentAstro.dbId,
+          user_id: user.id || user.user_id,
+          devotee_name: user.name || devoteeName || "Devotee",
+          devotee_phone: user.phone || phone || "0000000000",
+          booking_date: dateStr,
+          booking_time: timeStr,
+          consult_type: "chat",
+          status: "Active"
+        })
+        .select()
+        .single();
+
+      setConnectingModal(false);
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        router.push({
+          pathname: "/astrologer_chat",
+          params: {
+            bookingId: data.id,
+            astrologerId: currentAstro.dbId
+          }
+        });
+      }
+    } catch (err: any) {
+      setConnectingModal(false);
+      console.error("Error creating astrologer booking:", err);
+      Alert.alert(t("Booking Failed"), err.message || t("Could not start consultation. Please try again."));
     }
   };
 
@@ -952,29 +999,19 @@ export default function AstroScreen() {
                   <View style={s.pricingRow}>
                     <Ionicons name="wallet-outline" size={14} color={A.purple} style={{ marginRight: 6 }} />
                     <Text style={s.pricingText}>
-                      {t("Fee")}: <Text style={s.pricingHighlight}>{astro.chargePerMin} {t("Coins")} / {t("min")}</Text>
+                      {t("Fee")}: <Text style={s.pricingHighlight}>{astro.chargePerMin} {t("Coins")} / 5 {t("min")}</Text>
                     </Text>
                   </View>
 
                   <View style={s.actionsRow}>
                     <TouchableOpacity
-                      style={[s.consultBtn, s.chatBtn, !astro.isOnline && s.disabledBtn]}
+                      style={[s.consultBtn, s.callBtn, !astro.isOnline && s.disabledBtn]}
                       onPress={() => handleStartConsultation(astro, "chat")}
                       disabled={!astro.isOnline}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name="chatbubble-ellipses-sharp" size={14} color={astro.isOnline ? A.purple : A.textXs} style={{ marginRight: 4 }} />
-                      <Text style={[s.consultBtnText, { color: astro.isOnline ? A.purple : A.textXs }]}>{t("CHAT")}</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[s.consultBtn, s.callBtn, !astro.isOnline && s.disabledBtn]}
-                      onPress={() => handleStartConsultation(astro, "call")}
-                      disabled={!astro.isOnline}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="call-sharp" size={14} color="#ffffff" style={{ marginRight: 4 }} />
-                      <Text style={[s.consultBtnText, { color: "#ffffff" }]}>{t("CALL")}</Text>
+                      <Ionicons name="chatbubble-ellipses-sharp" size={14} color="#ffffff" style={{ marginRight: 4 }} />
+                      <Text style={[s.consultBtnText, { color: "#ffffff" }]}>{t("START CHAT")}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -1248,16 +1285,16 @@ export default function AstroScreen() {
                   <View style={s.summaryCard}>
                     <View style={s.summaryRow}>
                       <Text style={s.summaryLabel}>{t("Rate")}</Text>
-                      <Text style={s.summaryValue}>{selectedAstro.chargePerMin} {t("Coins")} / {t("min")}</Text>
+                      <Text style={s.summaryValue}>{selectedAstro.chargePerMin} {t("Coins")} / 5 {t("min")}</Text>
                     </View>
                     <View style={s.summaryRow}>
-                      <Text style={s.summaryLabel}>{t("Duration Preferred")}</Text>
-                      <Text style={s.summaryValue}>5 {t("min")} (Min)</Text>
+                      <Text style={s.summaryLabel}>{t("Session Block")}</Text>
+                      <Text style={s.summaryValue}>5 {t("min")}</Text>
                     </View>
                     <View style={[s.summaryRow, { borderBottomWidth: 0, paddingBottom: 0 }]}>
                       <Text style={s.summaryLabel}>{t("Method")}</Text>
                       <Text style={[s.summaryValue, { textTransform: "uppercase", color: A.purple }]}>
-                        {t(consultType)}
+                        {t("CHAT ONLY")}
                       </Text>
                     </View>
                   </View>

@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, View, Dimensions, Image } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { safeStorage } from '../services/storage';
@@ -13,8 +14,23 @@ export default function SplashScreen() {
   const gifSource = require('../assets/logo/loader_1.gif');
 
   useEffect(() => {
-    // Check if user session exists and navigate accordingly after 4 seconds
-    const checkSessionAndNavigate = async () => {
+    // Check native clipboard and session, then navigate accordingly after 4 seconds
+    const checkClipboardAndSession = async () => {
+      try {
+        const text = await Clipboard.getStringAsync();
+        if (text) {
+          // Match code=MPXXXXXX or raw MPXXXXXX
+          const match = text.match(/code=([a-zA-Z0-9_-]+)/i) || text.match(/\b(MP[a-zA-Z0-9]{6})\b/i);
+          if (match && match[1]) {
+            const matchedCode = match[1].toUpperCase();
+            console.log('[Splash] Auto-fetched referral code from native system clipboard:', matchedCode);
+            await safeStorage.setItem('pending_referral_code', matchedCode);
+          }
+        }
+      } catch (err) {
+        console.warn('[Splash] Error checking clipboard for referral:', err);
+      }
+
       try {
         const session = await safeStorage.getItem('user_session');
         if (session) {
@@ -29,7 +45,7 @@ export default function SplashScreen() {
     };
 
     const timer = setTimeout(() => {
-      checkSessionAndNavigate();
+      checkClipboardAndSession();
     }, 4000); 
 
     return () => clearTimeout(timer);

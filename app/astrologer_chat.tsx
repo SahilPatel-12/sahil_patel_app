@@ -12,6 +12,7 @@ import {
   Alert,
   Dimensions,
   Image,
+  Modal,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -63,7 +64,140 @@ export default function AstrologerChatScreen() {
   const [astrologer, setAstrologer] = useState<any>(null);
   const [userId, setUserId] = useState<string | null>(null);
 
+  const [timeLeft, setTimeLeft] = useState(300); // 5 minutes in seconds
+  const [timerActive, setTimerActive] = useState(true);
+  const [showExtendModal, setShowExtendModal] = useState(false);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [fetchingBalance, setFetchingBalance] = useState(false);
+
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Helper to format remaining time
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+  };
+
+  // Fetch current wallet balance
+  const fetchWalletBalance = async () => {
+    if (!userId) return;
+    setFetchingBalance(true);
+    try {
+      const { data, error } = await supabase
+        .from("user_wallets")
+        .select("balance")
+        .eq("user_id", userId)
+        .single();
+      if (error && error.code !== "PGRST116") throw error;
+      setWalletBalance(data ? data.balance : 0);
+    } catch (err) {
+      console.error("[AstrologerChat] Error fetching balance:", err);
+    } finally {
+      setFetchingBalance(false);
+    }
+  };
+
+  // Timer countdown hook
+  useEffect(() => {
+    let interval: any = null;
+    if (timerActive && timeLeft > 0) {
+      interval = setInterval(() => {
+        setTimeLeft((prev) => prev - 1);
+      }, 1000);
+    } else if (timeLeft === 0 && timerActive) {
+      setTimerActive(false);
+      fetchWalletBalance();
+      setShowExtendModal(true);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [timerActive, timeLeft]);
+
+  // Handle session extension
+  const handleExtendSession = async () => {
+    if (!userId || !astrologer) return;
+    const cost = astrologer.charge_per_min || 30;
+
+    if (walletBalance === null || walletBalance < cost) {
+      Alert.alert(t("Insufficient Coins"), t("Please add coins to your wallet to continue the session."));
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // 1. Deduct coins from user_wallets
+      const { error: deductErr } = await supabase
+        .from("user_wallets")
+        .update({ balance: walletBalance - cost })
+        .eq("user_id", userId);
+
+      if (deductErr) throw deductErr;
+
+      // 2. Log deduction transaction in coin_transactions
+      const { error: txErr } = await supabase
+        .from("coin_transactions")
+        .insert({
+          user_id: userId,
+          amount: -cost,
+          type: "astrologer_chat"
+        });
+
+      if (txErr) {
+        console.warn("[AstrologerChat] Failed to log transaction in ledger:", txErr.message);
+      }
+
+      // 3. Insert system message in chat
+      const { error: msgErr } = await supabase
+        .from("astrologer_chat_messages")
+        .insert({
+          booking_id: bookingId,
+          sender_id: astrologerId,
+          sender_type: "astrologer",
+          message_text: "Session extended by 5 minutes."
+        });
+
+      if (msgErr) throw msgErr;
+
+      // 4. Update local state
+      setTimeLeft(300);
+      setTimerActive(true);
+      setShowExtendModal(false);
+      Alert.alert(t("Session Extended"), t("Your chat session has been extended by 5 minutes!"));
+    } catch (err: any) {
+      console.error("[AstrologerChat] Failed to extend session:", err);
+      Alert.alert(t("Error"), err.message || t("Failed to extend session. Please try again."));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle End Session from Modal
+  const handleEndSessionFromModal = async () => {
+    setIsLoading(true);
+    try {
+      const { error } = await supabase
+        .from("astrologer_bookings")
+        .update({ status: "Completed" })
+        .eq("id", bookingId);
+
+      if (error) throw error;
+
+      setShowExtendModal(false);
+      Alert.alert(
+        t("Consultation Completed"),
+        t("May the planetary blessings align in your favor! Feedback and remedies logged successfully."),
+        [{ text: t("Jai Mata Di"), onPress: () => router.replace("/(tabs)/astro") }]
+      );
+    } catch (err: any) {
+      console.error("[AstrologerChat] End consultation error:", err);
+      Alert.alert(t("Error"), t("Failed to close session cleanly. Redirecting anyway."));
+      router.replace("/(tabs)/astro");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // 1. Load User Session and Astrologer details
   useEffect(() => {
@@ -75,6 +209,22 @@ export default function AstrologerChatScreen() {
           const session = JSON.parse(sessionStr);
           const userData = session.user || session;
           setUserId(userData.id);
+        }
+
+        // Verify active booking status
+        if (bookingId) {
+          const { data: booking, error: bookingErr } = await supabase
+            .from("astrologer_bookings")
+            .select("status")
+            .eq("id", bookingId)
+            .single();
+
+          if (bookingErr) throw bookingErr;
+          if (booking && booking.status !== "Active") {
+            Alert.alert(t("Session Ended"), t("This consultation session has already ended."));
+            router.replace("/(tabs)/astro");
+            return;
+          }
         }
 
         // Load Astrologer
@@ -276,6 +426,25 @@ export default function AstrologerChatScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Session Timer Bar */}
+      <View style={s.timerBar}>
+        <Ionicons name="time-outline" size={16} color={timeLeft < 60 ? "#ef4444" : A.purple} />
+        <Text style={[s.timerText, timeLeft < 60 && { color: "#ef4444" }]}>
+          {t("Session Time Remaining")}: {formatTime(timeLeft)}
+        </Text>
+        <View style={s.progressBarContainer}>
+          <View
+            style={[
+              s.progressBar,
+              {
+                width: `${(timeLeft / 300) * 100}%`,
+                backgroundColor: timeLeft < 60 ? "#ef4444" : A.purple,
+              },
+            ]}
+          />
+        </View>
+      </View>
+
       {/* Chat Messages List */}
       <ScrollView
         ref={scrollViewRef}
@@ -337,11 +506,12 @@ export default function AstrologerChatScreen() {
           placeholderTextColor={A.textXs}
           multiline
           maxLength={1000}
+          editable={!showExtendModal}
         />
         <TouchableOpacity
-          style={[s.sendBtn, !inputText.trim() && s.sendBtnDisabled]}
+          style={[s.sendBtn, (!inputText.trim() || showExtendModal) && s.sendBtnDisabled]}
           onPress={handleSend}
-          disabled={!inputText.trim() || isSending}
+          disabled={!inputText.trim() || isSending || showExtendModal}
           activeOpacity={0.8}
         >
           {isSending ? (
@@ -351,6 +521,97 @@ export default function AstrologerChatScreen() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* ── MODAL: SESSION EXTENSION ─────────────────────────────────────────── */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showExtendModal}
+        onRequestClose={() => {
+          // Prevent closing by tapping back button
+        }}
+      >
+        <View style={s.modalOverlay}>
+          <View style={s.extendModalContent}>
+            <Text style={s.extendModalTitle}>⏳ {t("Session Block Expired")}</Text>
+            <Text style={s.extendModalDescription}>
+              {t("Your 5-minute chat block has ended. To continue your spiritual consultation with")} <Text style={{ fontFamily: "Outfit-Bold" }}>{astroName}</Text>, {t("please extend your session.")}
+            </Text>
+
+            <View style={s.extendSummaryCard}>
+              <View style={s.extendSummaryRow}>
+                <Text style={s.extendSummaryLabel}>{t("Extension Cost")}</Text>
+                <Text style={s.extendSummaryValue}>{astrologer?.charge_per_min || 30} {t("Coins")}</Text>
+              </View>
+              <View style={[s.extendSummaryRow, { borderBottomWidth: 0, paddingBottom: 0 }]}>
+                <Text style={s.extendSummaryLabel}>{t("Your Balance")}</Text>
+                {fetchingBalance ? (
+                  <ActivityIndicator size="small" color={A.purple} />
+                ) : (
+                  <Text
+                    style={[
+                      s.extendSummaryValue,
+                      walletBalance !== null && walletBalance < (astrologer?.charge_per_min || 30)
+                        ? { color: "#ef4444" }
+                        : { color: A.green },
+                    ]}
+                  >
+                    {walletBalance !== null ? `${walletBalance} ${t("Coins")}` : `0 ${t("Coins")}`}
+                  </Text>
+                )}
+              </View>
+            </View>
+
+            {walletBalance !== null && walletBalance < (astrologer?.charge_per_min || 30) && (
+              <View style={s.insufficientAlert}>
+                <Ionicons name="warning" size={14} color="#b45309" style={{ marginRight: 6 }} />
+                <Text style={s.insufficientAlertText}>
+                  {t("You do not have enough coins to extend. Please add coins first.")}
+                </Text>
+              </View>
+            )}
+
+            <View style={s.extendModalButtons}>
+              <TouchableOpacity
+                style={[
+                  s.extendBtnPrimary,
+                  (walletBalance === null || walletBalance < (astrologer?.charge_per_min || 30) || isLoading) && s.extendBtnDisabled,
+                ]}
+                onPress={handleExtendSession}
+                disabled={walletBalance === null || walletBalance < (astrologer?.charge_per_min || 30) || isLoading}
+                activeOpacity={0.8}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={s.extendBtnPrimaryText}>
+                    {t("Extend Chat (5 mins)")}
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={s.extendBtnSecondary}
+                onPress={() => {
+                  router.push("/wallet");
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={s.extendBtnSecondaryText}>{t("Add Coins")}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={s.extendBtnDanger}
+                onPress={handleEndSessionFromModal}
+                disabled={isLoading}
+                activeOpacity={0.8}
+              >
+                <Text style={s.extendBtnDangerText}>{t("End Consultation")}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -589,5 +850,156 @@ const s = StyleSheet.create({
   },
   sendBtnDisabled: {
     backgroundColor: A.textXs,
+  },
+  timerBar: {
+    backgroundColor: "#ffffff",
+    borderBottomWidth: 1,
+    borderBottomColor: A.bdr2,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  timerText: {
+    fontSize: 12.5,
+    fontFamily: "Outfit-Bold",
+    color: A.purple,
+    marginLeft: 6,
+  },
+  progressBarContainer: {
+    flex: 1,
+    height: 6,
+    backgroundColor: A.purpleBg,
+    borderRadius: 3,
+    marginLeft: 12,
+    overflow: "hidden",
+  },
+  progressBar: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  extendModalContent: {
+    backgroundColor: "#ffffff",
+    borderRadius: 24,
+    width: "100%",
+    maxWidth: 340,
+    padding: 24,
+    alignItems: "center",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  extendModalTitle: {
+    fontSize: 18,
+    fontFamily: "Outfit-Bold",
+    color: A.text,
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  extendModalDescription: {
+    fontSize: 13,
+    fontFamily: "Outfit-Medium",
+    color: A.textS,
+    textAlign: "center",
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  extendSummaryCard: {
+    backgroundColor: "#f8fafc",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: A.bdr2,
+    width: "100%",
+    padding: 16,
+    marginBottom: 16,
+  },
+  extendSummaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: A.bdr2,
+    marginBottom: 10,
+  },
+  extendSummaryLabel: {
+    fontSize: 12.5,
+    fontFamily: "Outfit-Medium",
+    color: A.textS,
+  },
+  extendSummaryValue: {
+    fontSize: 13,
+    fontFamily: "Outfit-Bold",
+    color: A.text,
+  },
+  insufficientAlert: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fffbeb",
+    borderWidth: 1,
+    borderColor: "#fef3c7",
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 20,
+  },
+  insufficientAlertText: {
+    flex: 1,
+    fontSize: 11,
+    fontFamily: "Outfit-Medium",
+    color: "#b45309",
+  },
+  extendModalButtons: {
+    width: "100%",
+    gap: 10,
+  },
+  extendBtnPrimary: {
+    backgroundColor: A.purple,
+    borderRadius: 14,
+    height: 44,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  extendBtnPrimaryText: {
+    fontSize: 13.5,
+    fontFamily: "Outfit-Bold",
+    color: "#ffffff",
+  },
+  extendBtnDisabled: {
+    backgroundColor: A.textXs,
+  },
+  extendBtnSecondary: {
+    backgroundColor: "#ffffff",
+    borderWidth: 1.5,
+    borderColor: A.purple,
+    borderRadius: 14,
+    height: 44,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  extendBtnSecondaryText: {
+    fontSize: 13.5,
+    fontFamily: "Outfit-Bold",
+    color: A.purple,
+  },
+  extendBtnDanger: {
+    backgroundColor: "#fee2e2",
+    borderRadius: 14,
+    height: 44,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  extendBtnDangerText: {
+    fontSize: 13.5,
+    fontFamily: "Outfit-Bold",
+    color: "#ef4444",
   },
 });

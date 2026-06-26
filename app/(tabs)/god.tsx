@@ -213,7 +213,7 @@ const DeityImageWrapper = ({ item, selectedGodName }: { item: any; selectedGodNa
 export default function GodScreen() {
   const { t } = useLanguage();
   const [categories, setCategories] = useState<any[]>(GOD_DATA);
-  const [selectedGod, setSelectedGod] = useState(GOD_DATA[1]); // Default to Ma Laxmi
+  const [selectedGod, setSelectedGod] = useState(GOD_DATA[0]); // Default to Shiv Ji
   const [displayImages, setDisplayImages] = useState<any[]>([]);
   const [allGodImages, setAllGodImages] = useState<any[]>([]);
   const [isLoadingImages, setIsLoadingImages] = useState(false);
@@ -800,7 +800,7 @@ export default function GodScreen() {
   }));
 
   const thaliAnimatedStyle = useAnimatedStyle(() => {
-    const radius = 60;
+    const radius = 80;
     const angle = thaliProgress.value * 2 * Math.PI;
     return {
       transform: [
@@ -1480,15 +1480,16 @@ const styles = StyleSheet.create({
     zIndex: 4,
   },
   thaliImage: {
-    width: width * 0.6,
-    height: 120,
+    width: width * 0.8,
+    height: 160,
   },
   floatingButtonsContainer: {
     position: 'absolute',
     right: 20,
-    bottom: 120,
+    bottom: 180,
     alignItems: 'center',
     gap: 15,
+    zIndex: 50,
   },
   artiButton: {
     width: 65,
@@ -1541,8 +1542,8 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
   },
   artiButtonIcon: {
-    width: '80%',
-    height: '80%',
+    width: '145%',
+    height: '145%',
     resizeMode: 'contain',
   },
   backdrop: {

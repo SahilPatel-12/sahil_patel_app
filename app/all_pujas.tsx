@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../services/supabase';
@@ -129,9 +129,16 @@ const PUJAS_DATA = [
 ];
 
 export default function AllPujasScreen() {
+  const { category } = useLocalSearchParams<{ category?: string }>();
   const { t } = useLanguage();
   const { cart, handleAddToCart, handleIncrement, handleDecrement, totalCartCount } = useCart();
-  const [selectedCategory, setSelectedCategory] = React.useState('All');
+  const [selectedCategory, setSelectedCategory] = React.useState(category || 'All');
+
+  React.useEffect(() => {
+    if (category) {
+      setSelectedCategory(category);
+    }
+  }, [category]);
   const [generalPujas, setGeneralPujas] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [viewAllSettings, setViewAllSettings] = React.useState({

@@ -10,9 +10,9 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
-  Clipboard,
   Share
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -76,8 +76,8 @@ export default function ShareScreen() {
     loadUserData();
   }, []);
 
-  const handleCopyCode = () => {
-    Clipboard.setString(referralCode);
+  const handleCopyCode = async () => {
+    await Clipboard.setStringAsync(referralCode);
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setCopied(true);
     setTimeout(() => {
