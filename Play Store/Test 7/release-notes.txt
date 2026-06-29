@@ -1,0 +1,18 @@
+Mantra Puja Release Notes - Version 7.0.0 (Build 7)
+
+What's New in this Release:
+
+1. Unified Alarm Setup Buttons:
+   - Embedded alarm setup icons immediately next to the play button in all song rows across the Discover Chants page and Deity Detail playlists.
+   - The consistent layout makes scheduling alarms for your favorite chants faster and more intuitive.
+
+2. Full Devotional Alarms Page:
+   - Built a dedicated Alarms dashboard screen (/app/alarms.tsx) accessible from the headers of the Music tabs.
+   - View, toggle active statuses, delete, and add multiple alarms in a central, clean Material interface.
+
+3. Android-style Wheel Scroll Time Picker:
+   - Replaced old numeric grids with dynamic vertical scroll wheel pickers for setting Hours, Minutes, and AM/PM periods.
+   - Implemented intelligent minute wrapping: scrolling minutes forward past 59 to 00 automatically increments the hour (and toggles AM/PM period when crossing 12). Scrolling backward past 00 to 59 automatically decrements the hour.
+
+4. Robust Dev Environment Safety Checks:
+   - Added native bridge safeguards to handle default Expo Go containers gracefully, replacing null pointer exceptions with user-friendly notices about dev client compilation requirements.

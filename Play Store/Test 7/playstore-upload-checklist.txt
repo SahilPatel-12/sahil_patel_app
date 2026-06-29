@@ -1,0 +1,10 @@
+Play Store Upload Checklist - Test 7 (Version 7.0.0)
+
+[CONFIRMED] AAB Ready for Upload: PASS (Optimized release bundle compiled)
+[CONFIRMED] APK Ready for Testing: PASS (Installable testing APK copied)
+[CONFIRMED] Version Updated: PASS (Version Name: 7.0.0, Version Code: 7)
+[CONFIRMED] Package Name Verified: PASS (com.mantrapuja.official)
+[CONFIRMED] Production Certificate Verified: PASS (Fingerprints SHA1 and SHA256 match exactly)
+[CONFIRMED] Existing Keystore Used: PASS (Signed with 'my-key-alias' from root release keystore)
+[CONFIRMED] Google Play Compatibility: PASS (No upload blockers, target SDK 36, compiled in Release mode)
+[CONFIRMED] Ready for Play Store Update: PASS

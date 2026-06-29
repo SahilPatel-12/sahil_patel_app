@@ -58,17 +58,11 @@ export default function NotificationsScreen() {
         loggedInUserId = (session.user || session).id;
       }
 
-      // Fetch sent notifications (global notifications + user-specific notifications)
+      // Fetch sent notifications (global broadcasts)
       let query = supabase
         .from('push_notifications')
         .select('*')
         .eq('status', 'sent');
-
-      if (loggedInUserId) {
-        query = query.or(`user_id.is.null,user_id.eq.${loggedInUserId}`);
-      } else {
-        query = query.is('user_id', null);
-      }
 
       const { data, error } = await query
         .order('scheduled_date', { ascending: false })

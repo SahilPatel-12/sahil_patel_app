@@ -2,7 +2,7 @@
   "expo": {
     "name": "mantrapuja",
     "slug": "mantrapuja",
-    "version": "5.0.0",
+    "version": "7.0.0",
     "orientation": "portrait",
     "icon": "./assets/app_logos/icon.png",
     "scheme": "mantrapuja",
@@ -22,7 +22,7 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.mantrapuja.official",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 5
+      "versionCode": 7
     },
     "web": {
       "output": "static",

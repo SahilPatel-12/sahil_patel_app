@@ -1,0 +1,18 @@
+Category,Property,Value,File Location,Validation Status,Remarks
+Application,Package Name,com.mantrapuja.official,app.json,VALID,Production package identifier
+Application,Application ID,com.mantrapuja.official,android/app/build.gradle,VALID,Identical to package name
+Application,Version Name,7.0.0,app.json,VALID,Version matches Play Store release guidelines
+Application,Version Code,7,app.json,VALID,Higher than previously published versions
+Application,Build Type,Release,package-info.txt,VALID,Release production compilation
+Android Build,Min SDK Version,24,android/app/build.gradle,VALID,Android 7.0 minimum support
+Android Build,Target SDK Version,36,android/app/build.gradle,VALID,Targeting Android 15 API 36
+Android Build,Compile SDK Version,36,android/app/build.gradle,VALID,Matches target SDK level
+Signing,Signing Configuration,release,android/app/build.gradle,VALID,Explicitly mapped release signing block
+Signing,SHA1,12:DA:BF:BA:DC:1C:AB:FC:44:54:10:16:36:4A:10:B5:40:93:A7:13,signing-report.txt,VALID,Release signing key fingerprint
+Signing,SHA256,84:C0:D9:68:82:24:C7:D0:B1:B0:13:78:36:BB:28:C5:6C:B6:87:A8:43:57:4D:F7:93:7D:A7:B3:A0:7D:24:89,signing-report.txt,VALID,Release SHA256 matches Google Play signature
+Signing,Release Certificate Status,FOUND & VERIFIED,signing-report.txt,VALID,Signed with CN=Mantra Puja certificate
+Signing,Debug Certificate Status,NOT USED,signing-report.txt,VALID,No debug certificate used
+Build Outputs,APK Path,Play Store/Test 7/app-release.apk,build-info.txt,VALID,Release APK built and verified
+Build Outputs,AAB Path,Play Store/Test 7/app-release.aab,build-info.txt,VALID,Release AAB built and verified
+Compatibility,Google Play Compatibility Status,COMPATIBLE,playstore-upload-checklist.txt,VALID,AAB package ready for upload to Play Console
+Compatibility,Validation Result,PASS,N/A,VALID,All checks completed successfully

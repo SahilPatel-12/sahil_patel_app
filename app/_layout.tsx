@@ -92,6 +92,7 @@ export default function RootLayout() {
                 <Stack.Screen name="panchang" />
                 <Stack.Screen name="book_pandit_puja" />
                 <Stack.Screen name="astrologer_chat" />
+                <Stack.Screen name="alarms" />
               </Stack>
             ) : null}
           </DrawerProvider>

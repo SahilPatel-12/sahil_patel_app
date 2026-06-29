@@ -16,6 +16,7 @@ import {
   TextInput,
   ImageBackground,
   Animated,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "../../constants/Colors";
@@ -26,8 +27,10 @@ import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { usePlayback } from '../../context/PlaybackContext';
 import { bhajanSupabase } from '../../services/bhajanSupabase';
 import { supabase } from '../../services/supabase';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, router } from 'expo-router';
 import DraggableCalendarButton from "../../components/DraggableCalendarButton";
+import AndroidWheelPicker from "../../components/AndroidWheelPicker";
+import { AlarmSystem } from '../../services/AlarmSystem';
 import { BlurView } from 'expo-blur';
 import Svg, { Path, Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
@@ -103,6 +106,72 @@ export default function MusicScreen() {
 
   // Bell count
   const [bellCount, setBellCount] = useState(0);
+
+  // Alarm states
+  const [isAlarmModalVisible, setIsAlarmModalVisible] = useState(false);
+  const [alarmHour, setAlarmHour] = useState(6);
+  const [alarmMinute, setAlarmMinute] = useState(0);
+  const [alarmPeriod, setAlarmPeriod] = useState<'AM' | 'PM'>('AM');
+  const [alarmLabel, setAlarmLabel] = useState('Morning Prayer');
+  const [alarmRepeatType, setAlarmRepeatType] = useState<'ONCE' | 'DAILY' | 'WEEKDAYS' | 'CUSTOM' | 'SUNRISE' | 'SUNSET' | 'MUHURTA'>('DAILY');
+  const [alarmWeekdaysMask, setAlarmWeekdaysMask] = useState(62); // Mon-Fri
+  const [activeAlarmTrack, setActiveAlarmTrack] = useState<any>(null);
+  const [isPermissionModalVisible, setIsPermissionModalVisible] = useState(false);
+  const [pendingAlarmTrack, setPendingAlarmTrack] = useState<any>(null);
+  const [permissionModalType, setPermissionModalType] = useState<'SYSTEM' | 'BATTERY'>('SYSTEM');
+  const [isSavingAlarm, setIsSavingAlarm] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [downloadStatusText, setDownloadStatusText] = useState('Downloading devotional chant...');
+
+  // Android scroll wheel picker items and wrapping logic
+  const hourItems = useMemo(() => ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"], []);
+  const minuteItems = useMemo(() => Array.from({ length: 60 }, (_, i) => i < 10 ? '0' + i : i.toString()), []);
+  const periodItems = useMemo(() => ["AM", "PM"], []);
+
+  const incrementHour = () => {
+    setAlarmHour(h => {
+      let nextH = h === 12 ? 1 : h + 1;
+      if (h === 11) {
+        setAlarmPeriod(p => p === 'AM' ? 'PM' : 'AM');
+      }
+      return nextH;
+    });
+  };
+
+  const decrementHour = () => {
+    setAlarmHour(h => {
+      let nextH = h === 1 ? 12 : h - 1;
+      if (h === 12) {
+        setAlarmPeriod(p => p === 'AM' ? 'PM' : 'AM');
+      }
+      return nextH;
+    });
+  };
+
+  const handleHourChange = (newHourVal: string) => {
+    const newH = parseInt(newHourVal, 10);
+    const oldH = alarmHour;
+    if (oldH !== newH) {
+      if ((oldH === 11 && newH === 12) || (oldH === 12 && newH === 11)) {
+        setAlarmPeriod(p => p === 'AM' ? 'PM' : 'AM');
+      }
+      setAlarmHour(newH);
+    }
+  };
+
+  const handleMinuteChange = (newMinVal: string) => {
+    const newMin = parseInt(newMinVal, 10);
+    const oldMin = alarmMinute;
+    
+    if (oldMin !== newMin) {
+      if (newMin - oldMin < -30) {
+        incrementHour();
+      } else if (newMin - oldMin > 30) {
+        decrementHour();
+      }
+      setAlarmMinute(newMin);
+    }
+  };
 
   // Secondary player instance for Ringing Temple Bell overlay sound
   const bellSoundPlayer = useAudioPlayer(require('../../assets/Sound/bell_sound.mp3'));
@@ -539,6 +608,151 @@ export default function MusicScreen() {
     );
   }, [searchQuery, filteredTracks, categoryDetailTracks, selectedDetailCategory, tracks]);
 
+  const openAlarmModalForTrack = async (track: any) => {
+    if (!track) return;
+    if (!AlarmSystem.isBridgeAvailable()) {
+      Alert.alert(
+        'Devotional Alarms ⏰',
+        'Alarms require a custom development build or production release build. They are not supported on iOS or inside the default Expo Go app.'
+      );
+      return;
+    }
+
+    try {
+      const hasPermissions = await AlarmSystem.checkAlarmPermissions();
+      if (!hasPermissions) {
+        setPendingAlarmTrack(track);
+        setPermissionModalType('SYSTEM');
+        setIsPermissionModalVisible(true);
+        return;
+      }
+
+      const batteryIgnored = await AlarmSystem.isBatteryOptimizationIgnored();
+      if (!batteryIgnored) {
+        setPendingAlarmTrack(track);
+        setPermissionModalType('BATTERY');
+        setIsPermissionModalVisible(true);
+        return;
+      }
+
+      setActiveAlarmTrack(track);
+      setIsAlarmModalVisible(true);
+    } catch (e) {
+      console.error('Failed to check permissions', e);
+      setActiveAlarmTrack(track);
+      setIsAlarmModalVisible(true);
+    }
+  };
+
+  const handleSaveAlarm = async () => {
+    if (!activeAlarmTrack) return;
+
+    if (!AlarmSystem.isBridgeAvailable()) {
+      Alert.alert(
+        'Devotional Alarms ⏰',
+        'Alarms require a custom development build or production release build. They are not supported on iOS or inside the default Expo Go app.'
+      );
+      return;
+    }
+
+    try {
+      // Compute epoch nextTrigger
+      const now = new Date();
+      let hour24 = alarmHour;
+      if (alarmPeriod === 'PM' && alarmHour < 12) hour24 += 12;
+      if (alarmPeriod === 'AM' && alarmHour === 12) hour24 = 0;
+
+      const triggerDate = new Date();
+      triggerDate.setHours(hour24);
+      triggerDate.setMinutes(alarmMinute);
+      triggerDate.setSeconds(0);
+      triggerDate.setMilliseconds(0);
+
+      // If scheduled time has already passed for today, make it tomorrow
+      if (triggerDate.getTime() <= now.getTime()) {
+        triggerDate.setDate(triggerDate.getDate() + 1);
+      }
+
+      // Initialize UI saving/downloading state
+      setIsSavingAlarm(true);
+      setDownloadProgress(0.05);
+      setDownloadStatusText('Connecting to server...');
+
+      const alarmId = Math.random().toString(36).substring(7);
+
+      // 4. Call native bridge createAlarm (format label as label|category)
+      const success = await AlarmSystem.createAlarm({
+        id: alarmId,
+        label: `${alarmLabel}|${activeAlarmTrack.category || 'Shiv Ji'}`,
+        musicId: activeAlarmTrack.id,
+        downloadUrl: activeAlarmTrack.url,
+        nextTrigger: triggerDate.getTime(),
+        repeatType: alarmRepeatType,
+        weekdaysMask: alarmRepeatType === 'DAILY' ? 127 : alarmRepeatType === 'WEEKDAYS' ? 62 : alarmWeekdaysMask,
+        volume: 1.0,
+        fadeInDuration: 10,
+        vibration: true,
+        flashlight: false
+      });
+
+      if (!success) {
+        setIsSavingAlarm(false);
+        Alert.alert('Error', 'Failed to configure alarm on native system.');
+        return;
+      }
+
+      // 5. Smooth progress bar simulation
+      let currentProgress = 0.05;
+      const progressInterval = setInterval(() => {
+        currentProgress += (1 - currentProgress) * 0.15; // asymptotic curve towards 100%
+        setDownloadProgress(currentProgress);
+        if (currentProgress < 0.3) {
+          setDownloadStatusText('Downloading devotional chant...');
+        } else if (currentProgress < 0.7) {
+          setDownloadStatusText('Caching chant on device...');
+        } else {
+          setDownloadStatusText('Scheduling native alarm...');
+        }
+      }, 500);
+
+      // 6. Poll database to check when isDownloaded changes to true
+      let pollCount = 0;
+      const pollInterval = setInterval(async () => {
+        pollCount++;
+        const alarmsList = await AlarmSystem.getAlarms();
+        const matched = alarmsList.find(a => a.id === alarmId);
+        
+        if (matched && matched.isDownloaded) {
+          // Success!
+          clearInterval(progressInterval);
+          clearInterval(pollInterval);
+          setDownloadProgress(1);
+          setDownloadStatusText('Alarm Set successfully! 🌸');
+          
+          setTimeout(() => {
+            setIsSavingAlarm(false);
+            setIsAlarmModalVisible(false);
+          }, 1500);
+        } else if (pollCount > 25) { 
+          // Timeout after 25 seconds
+          clearInterval(progressInterval);
+          clearInterval(pollInterval);
+          setIsSavingAlarm(false);
+          Alert.alert(
+            'Alarm Configured', 
+            'Alarm is set. Chant is downloading in the background.'
+          );
+          setIsAlarmModalVisible(false);
+        }
+      }, 1000);
+
+    } catch (e: any) {
+      console.error(e);
+      setIsSavingAlarm(false);
+      Alert.alert('Alarm Config Error', e.message || 'An unexpected error occurred.');
+    }
+  };
+
   // Controller Handlers
   const handlePlayPause = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -731,13 +945,20 @@ export default function MusicScreen() {
               style={StyleSheet.absoluteFillObject}
             />
             
-            <SafeAreaView style={styles.detailHeaderTopRow} edges={['top']}>
+            <SafeAreaView style={[styles.detailHeaderTopRow, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]} edges={['top']}>
               <TouchableOpacity 
                 style={styles.detailBackCircle} 
                 onPress={() => setSelectedDetailCategory(null)}
                 activeOpacity={0.8}
               >
                 <Ionicons name="chevron-back" size={24} color="#0f172a" />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.detailBackCircle} 
+                onPress={() => router.push('/alarms')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="alarm-outline" size={20} color="#0f172a" />
               </TouchableOpacity>
             </SafeAreaView>
 
@@ -826,17 +1047,60 @@ export default function MusicScreen() {
                           </Text>
                         </View>
                         
-                        {isCurrent && status.playing ? (
-                          <View style={styles.visualizerWaveWrapper}>
-                            <View style={[styles.waveLine, { height: 12 }]} />
-                            <View style={[styles.waveLine, { height: 16 }]} />
-                            <View style={[styles.waveLine, { height: 8 }]} />
-                          </View>
-                        ) : (
-                          <TouchableOpacity style={styles.trackDotsMenu} activeOpacity={0.7}>
-                            <Ionicons name="ellipsis-horizontal" size={20} color="#64748b" />
+                        <Text style={styles.trackListItemDuration}>{track.duration}</Text>
+
+                        <TouchableOpacity
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: '#fff7ed',
+                            borderWidth: 1,
+                            borderColor: '#fed7aa',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            marginRight: 8,
+                          }}
+                          activeOpacity={0.7}
+                          onPress={() => openAlarmModalForTrack(track)}
+                        >
+                          <Ionicons name="alarm" size={18} color="#ea580c" />
+                        </TouchableOpacity>
+
+                        <View style={styles.listPlayBtnGroup}>
+                          {isCurrent && (
+                            <Animated.Image
+                              source={require('../../assets/imp_pngs/pngegg (2).png')}
+                              style={[
+                                styles.mandalaListPlayBg,
+                                {
+                                  transform: [{ rotate: playMandalaRotateInterpolate }]
+                                }
+                              ]}
+                            />
+                          )}
+                          
+                          <TouchableOpacity 
+                            style={[styles.trackListPlayIconContainer, isCurrent && status.playing && styles.trackListPlayIconActive]}
+                            onPress={() => {
+                              const originalIdx = tracks.findIndex(t => t.id === track.id);
+                              if (originalIdx !== -1) {
+                                if (isCurrent) {
+                                  handlePlayPause();
+                                } else {
+                                  setActiveTrackIndex(originalIdx);
+                                }
+                              }
+                            }}
+                          >
+                            <Ionicons 
+                              name={isCurrent && status.playing ? "pause" : "play"} 
+                              size={12} 
+                              color="#ffffff" 
+                              style={!(isCurrent && status.playing) && { marginLeft: 1.5 }}
+                            />
                           </TouchableOpacity>
-                        )}
+                        </View>
                       </TouchableOpacity>
                     );
                   })}
@@ -885,6 +1149,26 @@ export default function MusicScreen() {
             <View style={styles.carouselSection}>
               <View style={styles.carouselHeaderRow}>
                 <Text style={styles.sectionHeading}>{t('Music Trending')}</Text>
+                <TouchableOpacity 
+                  onPress={() => router.push('/alarms')}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: '#fff7ed',
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: 20,
+                    borderWidth: 1,
+                    borderColor: '#fed7aa',
+                    gap: 4
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="alarm-outline" size={16} color="#ea580c" />
+                  <Text style={{ fontSize: 12, fontFamily: 'Outfit-Bold', color: '#ea580c' }}>
+                    {t('Alarms')}
+                  </Text>
+                </TouchableOpacity>
               </View>
               
               <ScrollView
@@ -984,6 +1268,24 @@ export default function MusicScreen() {
                         </View>
                         <Text style={styles.trackListItemDuration}>{track.duration}</Text>
                         
+                        <TouchableOpacity
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: '#fff7ed',
+                            borderWidth: 1,
+                            borderColor: '#fed7aa',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            marginRight: 8,
+                          }}
+                          activeOpacity={0.7}
+                          onPress={() => openAlarmModalForTrack(track)}
+                        >
+                          <Ionicons name="alarm" size={18} color="#ea580c" />
+                        </TouchableOpacity>
+
                         <View style={styles.listPlayBtnGroup}>
                           {isCurrent && (
                             <Animated.Image
@@ -1108,17 +1410,28 @@ export default function MusicScreen() {
                   <Ionicons name="chevron-back" size={24} color="#0f172a" />
                 </TouchableOpacity>
                 <Text style={styles.modalPlayerTitle}>Player</Text>
-                <TouchableOpacity 
-                  onPress={() => toggleLike(activeTrack.id)} 
-                  style={styles.modalTopIconBtn}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons 
-                    name={likedTracks[activeTrack.id] ? "heart" : "heart-outline"} 
-                    size={22} 
-                    color={likedTracks[activeTrack.id] ? "#ef4444" : "#64748b"} 
-                  />
-                </TouchableOpacity>
+                
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <TouchableOpacity 
+                    onPress={() => activeTrack && openAlarmModalForTrack(activeTrack)} 
+                    style={styles.modalTopIconBtn}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="alarm-outline" size={22} color="#ea580c" />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    onPress={() => toggleLike(activeTrack.id)} 
+                    style={styles.modalTopIconBtn}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons 
+                      name={likedTracks[activeTrack.id] ? "heart" : "heart-outline"} 
+                      size={22} 
+                      color={likedTracks[activeTrack.id] ? "#ef4444" : "#64748b"} 
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
               <View style={styles.playerCardFrame}>
                 <ScrollView 
@@ -1465,6 +1778,314 @@ export default function MusicScreen() {
           </View>
         </Modal>
       )}
+
+      {/* 8. Premium Custom Permission Modal */}
+      <Modal
+        visible={isPermissionModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsPermissionModalVisible(false)}
+      >
+        <View style={styles.permissionModalOverlay}>
+          <BlurView intensity={30} style={StyleSheet.absoluteFillObject} tint="dark" />
+          <View style={styles.permissionModalContent}>
+            
+            {/* Header Icon */}
+            <View style={styles.permissionModalHeaderIconContainer}>
+              <LinearGradient
+                colors={['#ffedd5', '#fed7aa']}
+                style={styles.permissionHeaderGradient}
+              >
+                <Ionicons 
+                  name={permissionModalType === 'SYSTEM' ? "notifications-circle-outline" : "battery-dead-outline"} 
+                  size={48} 
+                  color="#ea580c" 
+                />
+              </LinearGradient>
+            </View>
+
+            {/* Title */}
+            <Text style={styles.permissionModalTitle}>
+              {permissionModalType === 'SYSTEM' ? "Enable Alarm Settings" : "Optimize Battery Saver"}
+            </Text>
+
+            {/* Subtitle */}
+            <Text style={styles.permissionModalDescription}>
+              {permissionModalType === 'SYSTEM' 
+                ? "Mantra Puja requires Exact Alarm & Notification permissions so the bhajan/mantra can ring precisely on time, even when the device is locked."
+                : "Aggressive battery savers may stop alarms from ringing when the app is closed. Please disable battery optimization for Mantra Puja."}
+            </Text>
+
+            {/* Action Cards */}
+            {permissionModalType === 'SYSTEM' ? (
+              <View style={styles.permissionCardsList}>
+                <View style={styles.permissionMiniCard}>
+                  <Ionicons name="alarm-outline" size={20} color="#ea580c" />
+                  <View style={styles.permissionMiniCardInfo}>
+                    <Text style={styles.permissionMiniCardTitle}>Exact Alarms</Text>
+                    <Text style={styles.permissionMiniCardText}>Allows alarms to trigger at the precise minute.</Text>
+                  </View>
+                </View>
+                <View style={styles.permissionMiniCard}>
+                  <Ionicons name="notifications-outline" size={20} color="#ea580c" />
+                  <View style={styles.permissionMiniCardInfo}>
+                    <Text style={styles.permissionMiniCardTitle}>Notification Alerts</Text>
+                    <Text style={styles.permissionMiniCardText}>Shows snooze/dismiss controls on the lockscreen.</Text>
+                  </View>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.permissionCardsList}>
+                <View style={styles.permissionMiniCard}>
+                  <Ionicons name="flash-outline" size={20} color="#ea580c" />
+                  <View style={styles.permissionMiniCardInfo}>
+                    <Text style={styles.permissionMiniCardTitle}>Unrestricted Mode</Text>
+                    <Text style={styles.permissionMiniCardText}>Allows playback & wake-locks when the screen is off.</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* Buttons */}
+            <View style={styles.permissionModalActions}>
+              <TouchableOpacity
+                onPress={async () => {
+                  setIsPermissionModalVisible(false);
+                  if (permissionModalType === 'SYSTEM') {
+                    await AlarmSystem.requestAlarmPermissions();
+                  } else {
+                    await AlarmSystem.requestBatteryOptimizationWaiver();
+                    // Give a slight delay before showing the alarm config modal for the pending track
+                    setTimeout(() => {
+                      if (pendingAlarmTrack) {
+                        setActiveAlarmTrack(pendingAlarmTrack);
+                        setIsAlarmModalVisible(true);
+                      }
+                    }, 800);
+                  }
+                }}
+                style={styles.permissionGrantBtn}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={['#ea580c', '#c2410c']}
+                  style={styles.permissionGrantGradient}
+                >
+                  <Text style={styles.permissionGrantBtnText}>
+                    {permissionModalType === 'SYSTEM' ? "Configure Settings" : "Ignore Optimization"}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setIsPermissionModalVisible(false);
+                  if (permissionModalType === 'BATTERY' && pendingAlarmTrack) {
+                    // Let the user set the alarm anyway even if battery ignoring is skipped
+                    setActiveAlarmTrack(pendingAlarmTrack);
+                    setIsAlarmModalVisible(true);
+                  }
+                }}
+                style={styles.permissionCancelBtn}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.permissionCancelBtnText}>
+                  {permissionModalType === 'SYSTEM' ? "Cancel" : "Continue Anyway"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+          </View>
+        </View>
+      </Modal>
+
+      {/* 7. Premium Saffron Devotional Alarm Modal (Reference Phase 7) */}
+      <Modal
+        visible={isAlarmModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setIsAlarmModalVisible(false)}
+      >
+        <View style={styles.alarmModalOverlay}>
+          <BlurView intensity={20} style={StyleSheet.absoluteFillObject} />
+          <View style={styles.alarmModalContent}>
+            <View style={styles.alarmModalHeader}>
+              <Text style={styles.alarmModalTitle}>Schedule Alarm</Text>
+              <TouchableOpacity onPress={() => setIsAlarmModalVisible(false)} style={styles.alarmModalCloseBtn}>
+                <Ionicons name="close" size={22} color="#475569" />
+              </TouchableOpacity>
+            </View>
+
+            {isSavingAlarm ? (
+              <View style={{ paddingVertical: 45, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center' }}>
+                <ActivityIndicator size="large" color="#ea580c" />
+                <Text style={{
+                  fontSize: 16,
+                  fontFamily: 'Outfit-Bold',
+                  color: '#0f172a',
+                  marginTop: 20,
+                  marginBottom: 10,
+                  textAlign: 'center',
+                }}>
+                  {downloadStatusText}
+                </Text>
+                
+                {/* Progress Bar */}
+                <View style={{
+                  width: '100%',
+                  height: 6,
+                  backgroundColor: '#f1f5f9',
+                  borderRadius: 3,
+                  overflow: 'hidden',
+                  marginTop: 10,
+                  marginBottom: 20,
+                }}>
+                  <View style={{
+                    width: `${downloadProgress * 100}%`,
+                    height: '100%',
+                    backgroundColor: '#ea580c',
+                    borderRadius: 3,
+                  }} />
+                </View>
+                
+                <Text style={{
+                  fontSize: 13,
+                  fontFamily: 'Outfit-Medium',
+                  color: '#64748b',
+                  textAlign: 'center',
+                }}>
+                  Downloading "{activeAlarmTrack?.title}" for offline playback.
+                </Text>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.alarmModalScroll}>
+                <Text style={styles.alarmModalSubtitle}>
+                  Chant: <Text style={{ color: '#ea580c', fontFamily: 'Outfit-Bold' }}>{activeAlarmTrack?.title}</Text>
+                </Text>
+
+                {/* Time Picker Controls using Android Wheel Pickers */}
+                <View style={{
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: 12,
+                  marginVertical: 20,
+                }}>
+                  <AndroidWheelPicker
+                    items={hourItems}
+                    selectedValue={alarmHour.toString()}
+                    onValueChange={handleHourChange}
+                    width={75}
+                  />
+                  
+                  <Text style={{ fontSize: 24, fontFamily: 'Outfit-Bold', color: '#f97316' }}>:</Text>
+                  
+                  <AndroidWheelPicker
+                    items={minuteItems}
+                    selectedValue={alarmMinute < 10 ? '0' + alarmMinute : alarmMinute.toString()}
+                    onValueChange={handleMinuteChange}
+                    width={75}
+                  />
+
+                  <AndroidWheelPicker
+                    items={periodItems}
+                    selectedValue={alarmPeriod}
+                    onValueChange={(val) => setAlarmPeriod(val as any)}
+                    width={75}
+                  />
+                </View>
+
+                {/* Alarm Label Input */}
+                <Text style={styles.sectionLabel}>Alarm Label</Text>
+                <TextInput
+                  style={styles.labelInput}
+                  placeholder="Morning Jaap, Sandhya Aarti..."
+                  placeholderTextColor="#94a3b8"
+                  value={alarmLabel}
+                  onChangeText={setAlarmLabel}
+                />
+
+                {/* Repeat Options */}
+                <Text style={styles.sectionLabel}>Repeat Interval</Text>
+                <View style={styles.repeatGrid}>
+                  {[
+                    { label: 'Once', value: 'ONCE' },
+                    { label: 'Daily', value: 'DAILY' },
+                    { label: 'Weekdays', value: 'WEEKDAYS' },
+                    { label: 'Custom', value: 'CUSTOM' },
+                    { label: 'Brahma Muhurta', value: 'MUHURTA' }
+                  ].map((item) => (
+                    <TouchableOpacity
+                      key={item.value}
+                      style={[styles.repeatPill, alarmRepeatType === item.value && styles.repeatPillActive]}
+                      onPress={() => setAlarmRepeatType(item.value as any)}
+                    >
+                      <Text style={[styles.repeatPillText, alarmRepeatType === item.value && styles.repeatPillTextActive]}>
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Custom Weekdays Picker Row */}
+                {alarmRepeatType === 'CUSTOM' && (
+                  <View style={styles.weekdaysRow}>
+                    {[
+                      { label: 'Su', mask: 1 },
+                      { label: 'Mo', mask: 2 },
+                      { label: 'Tu', mask: 4 },
+                      { label: 'We', mask: 8 },
+                      { label: 'Th', mask: 16 },
+                      { label: 'Fr', mask: 32 },
+                      { label: 'Sa', mask: 64 }
+                    ].map((day) => {
+                      const active = (alarmWeekdaysMask & day.mask) !== 0;
+                      return (
+                        <TouchableOpacity
+                          key={day.mask}
+                          style={[styles.weekdayCircle, active && styles.weekdayCircleActive]}
+                          onPress={() => {
+                            setAlarmWeekdaysMask(prev => active ? prev & ~day.mask : prev | day.mask);
+                          }}
+                        >
+                          <Text style={[styles.weekdayText, active && styles.weekdayTextActive]}>
+                            {day.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {/* Safe battery warning disclaimer */}
+                <View style={styles.batteryWarningCard}>
+                  <Ionicons name="shield-checkmark-outline" size={18} color="#059669" style={{ marginRight: 6 }} />
+                  <Text style={styles.batteryWarningText}>
+                    Alarms are scheduled offline. Make sure notifications are enabled for this app.
+                  </Text>
+                </View>
+
+                {/* Action Buttons */}
+                <View style={styles.modalActionsRow}>
+                  <TouchableOpacity
+                    onPress={() => setIsAlarmModalVisible(false)}
+                    style={[styles.modalButton, styles.modalButtonCancel]}
+                  >
+                    <Text style={styles.modalButtonCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleSaveAlarm}
+                    style={[styles.modalButton, styles.modalButtonSave]}
+                  >
+                    <Text style={styles.modalButtonSaveText}>Set Alarm</Text>
+                  </TouchableOpacity>
+                </View>
+
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       <DraggableCalendarButton />
     </View>
@@ -2463,5 +3084,338 @@ const styles = StyleSheet.create({
     height: 44,
     resizeMode: 'contain',
     opacity: 0.85,
+  },
+  alarmModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.4)',
+    justifyContent: 'flex-end',
+  },
+  alarmModalContent: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
+    maxHeight: '85%',
+  },
+  alarmModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  alarmModalTitle: {
+    fontSize: 20,
+    fontFamily: 'Outfit-Bold',
+    color: '#0f172a',
+  },
+  alarmModalCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  alarmModalScroll: {
+    paddingBottom: 20,
+  },
+  alarmModalSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 20,
+  },
+  timePickerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 20,
+    paddingVertical: 20,
+    borderWidth: 1.5,
+    borderColor: '#f1f5f9',
+    marginBottom: 24,
+  },
+  pickerCol: {
+    alignItems: 'center',
+    width: 80,
+  },
+  pickerArrow: {
+    padding: 6,
+  },
+  pickerValue: {
+    fontSize: 34,
+    fontFamily: 'Outfit-Bold',
+    color: '#ea580c',
+    marginVertical: 4,
+  },
+  pickerLabel: {
+    fontSize: 10,
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  timeColon: {
+    fontSize: 34,
+    fontFamily: 'Outfit-Bold',
+    color: '#ea580c',
+    marginHorizontal: 10,
+    paddingBottom: 20,
+  },
+  periodContainer: {
+    alignItems: 'center',
+    width: 80,
+    justifyContent: 'center',
+  },
+  periodPill: {
+    backgroundColor: '#ea580c',
+    borderRadius: 15,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginVertical: 12,
+  },
+  periodText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontFamily: 'Outfit-Bold',
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontFamily: 'Outfit-Bold',
+    color: '#334155',
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  labelInput: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    height: 48,
+    fontSize: 14,
+    color: '#0f172a',
+    marginBottom: 20,
+  },
+  repeatGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  repeatPill: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  repeatPillActive: {
+    backgroundColor: '#fff7ed',
+    borderColor: '#fdba74',
+  },
+  repeatPillText: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  repeatPillTextActive: {
+    color: '#ea580c',
+    fontWeight: '700',
+  },
+  weekdaysRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    padding: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    marginBottom: 20,
+  },
+  weekdayCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  weekdayCircleActive: {
+    backgroundColor: '#ea580c',
+    borderColor: '#ea580c',
+  },
+  weekdayText: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  weekdayTextActive: {
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+  batteryWarningCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 24,
+  },
+  batteryWarningText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#065f46',
+    lineHeight: 16,
+  },
+  modalActionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  modalButtonCancelText: {
+    fontSize: 14,
+    color: '#475569',
+    fontWeight: '700',
+  },
+  modalButtonSave: {
+    backgroundColor: '#ea580c',
+  },
+  modalButtonSaveText: {
+    fontSize: 14,
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+  permissionModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  permissionModalContent: {
+    width: '100%',
+    backgroundColor: '#ffffff',
+    borderRadius: 28,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  permissionModalHeaderIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    overflow: 'hidden',
+    marginBottom: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  permissionHeaderGradient: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  permissionModalTitle: {
+    fontSize: 20,
+    fontFamily: 'Outfit-Bold',
+    color: '#0f172a',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  permissionModalDescription: {
+    fontSize: 13,
+    color: '#64748b',
+    lineHeight: 18,
+    textAlign: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 8,
+  },
+  permissionCardsList: {
+    width: '100%',
+    gap: 12,
+    marginBottom: 24,
+  },
+  permissionMiniCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    gap: 12,
+  },
+  permissionMiniCardInfo: {
+    flex: 1,
+  },
+  permissionMiniCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 2,
+  },
+  permissionMiniCardText: {
+    fontSize: 11,
+    color: '#64748b',
+    lineHeight: 15,
+  },
+  permissionModalActions: {
+    width: '100%',
+    gap: 10,
+  },
+  permissionGrantBtn: {
+    width: '100%',
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  permissionGrantGradient: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  permissionGrantBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  permissionCancelBtn: {
+    width: '100%',
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  permissionCancelBtnText: {
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

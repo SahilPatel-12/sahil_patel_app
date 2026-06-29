@@ -1,0 +1,25 @@
+Build Information:
+
+Build Date: Monday, Jun 29, 2026
+Build Time: 15:09 IST
+Build Type: Release
+Build Status: SUCCESSFUL
+Environment: Production
+
+Build Environment:
+- Java Version: OpenJDK 17.0.18 (Zulu17.64+15-CA)
+- Node.js Version: v22.22.3
+- npm Version: 10.9.8
+- Android SDK Path: /Users/sahilpatel/Library/Android/sdk
+- Build Tool: Gradle 8.14.3
+
+Build Outputs:
+- APK File Name: app-release.apk
+- APK File Size: 162,902,959 bytes (155.4 MB)
+- APK Path: Play Store/Test 7/app-release.apk
+
+- AAB File Name: app-release.aab
+- AAB File Size: 131,218,377 bytes (125.1 MB)
+- AAB Path: Play Store/Test 7/app-release.aab
+
+Status: SUCCESSFUL (Recompiled to package responsive Alarm_gate.png layout, bottom alignment, overlapping buttons, removing god image)

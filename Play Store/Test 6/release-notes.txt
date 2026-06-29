@@ -1,0 +1,21 @@
+Mantra Puja Release Notes - Version 6.0.0 (Build 6)
+
+What's New in this Release:
+
+1. Spiritual Wallet & Astrologer UI Redesign:
+   - Redesigned spiritual wallet UI in SettingsDrawer for easier balance checks and transactions.
+   - Enabled profile photo display support for astrologers inside consultation modules.
+
+2. Global Audio Playback & Native Compatibility:
+   - Implemented a global PlaybackContext to provide continuous and smooth audio control across the application.
+   - Migrated clipboard interfaces to expo-clipboard for better native compatibility and platform standardization.
+
+3. Astrology & Booking Features:
+   - Integrated full support for Rashi, Kundli, and Daan services.
+   - Completed astrologer chat integration and related database schema migrations.
+
+4. Database Caching optimizations:
+   - Implemented caching for Kundli and Panchang API queries to improve app responsiveness, optimize performance, and reduce server load.
+
+5. Invoicing and Store Operations:
+   - New invoice management system allowing dynamic receipt styling and generation.

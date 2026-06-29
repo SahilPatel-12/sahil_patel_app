@@ -36,6 +36,7 @@ async function testPush() {
     .select('*')
     .not('push_token', 'ilike', 'ExponentPushToken%')
     .eq('platform', 'android')
+    .order('updated_at', { ascending: false })
     .limit(1);
     
   if (error) {

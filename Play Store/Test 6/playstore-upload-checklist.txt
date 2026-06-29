@@ -1,0 +1,10 @@
+Play Store Upload Checklist - Test 6 (Version 6.0.0)
+
+[CONFIRMED] AAB Ready for Upload: YES (Targeting Play Console Production track)
+[CONFIRMED] APK Ready for Testing: YES (Internal / QA testing)
+[CONFIRMED] Version Updated: YES (Version Name 6.0.0, Version Code 6)
+[CONFIRMED] Package Name Verified: YES (com.mantrapuja.official)
+[CONFIRMED] Signing Verified: YES (SHA1/SHA256 digests verified using apksigner & jarsigner)
+[CONFIRMED] Existing Certificate Used: YES (Key alias 'my-key-alias' of 'my-release-key.keystore')
+[CONFIRMED] Google Play Compatible: YES (Target SDK 36, compiled in Release mode, no debug flags or certificates)
+[CONFIRMED] Ready to Upload: YES

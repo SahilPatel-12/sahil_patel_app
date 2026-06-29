@@ -1,0 +1,7 @@
+Package Information:
+
+Package Name: com.mantrapuja.official
+Application ID: com.mantrapuja.official
+Version Name: 7.0.0
+Version Code: 7
+Build Type: Release
