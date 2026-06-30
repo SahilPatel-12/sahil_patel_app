@@ -259,10 +259,9 @@ async function checkAndDispatchNotifications() {
 
             for (let i = 0; i < fcmChunks.length; i++) {
               const tokensChunk = fcmChunks[i];
-              const soundNameForAndroid = noti.sound_name || 'default';
-              const soundFileForApns = noti.sound_name && noti.sound_name !== 'default' 
-                ? `${noti.sound_name}.mp3` 
-                : 'default';
+              const soundFileForAndroid = 'bell_sound';
+              const channelIdForAndroid = 'bell_sound_v2';
+              const soundFileForApns = 'default';
 
               const message = {
                 tokens: tokensChunk,
@@ -280,8 +279,8 @@ async function checkAndDispatchNotifications() {
                 },
                 android: {
                   notification: {
-                    sound: soundNameForAndroid,
-                    channelId: soundNameForAndroid
+                    sound: soundFileForAndroid,
+                    channel_id: channelIdForAndroid
                   }
                 },
                 apns: {

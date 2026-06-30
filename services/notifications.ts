@@ -71,85 +71,24 @@ export async function registerForPushNotificationsAsync() {
     console.log('[Notifications] Device Push Token obtained:', token);
 
     if (Platform.OS === 'android') {
+      // Configure default channel to play native bell_sound
       await Notifications.setNotificationChannelAsync('default', {
         name: 'default',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#FF9500',
+        sound: 'bell_sound',
       });
 
-      // Dynamically register channels for all custom sounds registered in Supabase
-      try {
-        const { data: dbSounds } = await supabase
-          .from('notification_sounds')
-          .select('filename, name, file_url');
-        
-        if (dbSounds) {
-          const builtInSounds = ['default', 'bell_sound'];
-          let FileSystem: any = null;
-          try {
-            FileSystem = require('expo-file-system/legacy');
-          } catch (fsErr) {
-            console.error('[Notifications] Failed to load expo-file-system/legacy dynamically:', fsErr);
-          }
-          
-          for (const s of dbSounds) {
-            if (s.filename === 'default') continue;
-            
-            // Clean up any old cached channels to force Android to apply new sound configuration
-            try {
-              await Notifications.deleteNotificationChannelAsync(s.filename);
-            } catch (err) {
-              console.log(`[Notifications] Info: No existing channel found to delete for ${s.filename}`);
-            }
-
-            let soundUri: string | null = null;
-            
-            if (s.filename === 'bell_sound') {
-              // Built-in bell sound matches raw resource name without extension
-              soundUri = 'assets_sound_bell_sound';
-            } else if (s.file_url && FileSystem) {
-              // Custom sound: download it to the world-readable external cache directory so Android OS can play it
-              try {
-                const externalCacheDir = FileSystem.cacheDirectory + 'notification_sounds/';
-                const localFileUri = externalCacheDir + `${s.filename}.mp3`;
-                
-                // Ensure directory exists
-                const dirInfo = await FileSystem.getInfoAsync(externalCacheDir);
-                if (!dirInfo.exists) {
-                  await FileSystem.makeDirectoryAsync(externalCacheDir, { intermediates: true });
-                }
-                
-                const fileInfo = await FileSystem.getInfoAsync(localFileUri);
-                if (!fileInfo.exists) {
-                  console.log(`[Notifications] Downloading custom sound "${s.name}" from ${s.file_url}...`);
-                  const downloadResult = await FileSystem.downloadAsync(s.file_url, localFileUri);
-                  soundUri = downloadResult.uri;
-                  console.log(`[Notifications] Successfully downloaded sound to: ${soundUri}`);
-                } else {
-                  soundUri = localFileUri;
-                }
-              } catch (downloadErr) {
-                console.error(`[Notifications] Failed to download custom sound "${s.name}":`, downloadErr);
-                soundUri = 'default'; // Fallback to default chime on failure
-              }
-            }
-            
-            if (soundUri) {
-              await Notifications.setNotificationChannelAsync(s.filename, {
-                name: s.name,
-                importance: Notifications.AndroidImportance.MAX,
-                sound: soundUri,
-                vibrationPattern: [0, 250, 250, 250],
-                lightColor: '#FF9500',
-              });
-              console.log(`[Notifications] Registered Android channel for custom sound: ${s.filename} -> ${soundUri}`);
-            }
-          }
-        }
-      } catch (channelErr) {
-        console.error('[Notifications] Failed to load custom sound channels:', channelErr);
-      }
+      // Configure bell_sound_v2 channel to play native bell_sound
+      await Notifications.setNotificationChannelAsync('bell_sound_v2', {
+        name: 'bell_sound_v2',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF9500',
+        sound: 'bell_sound',
+      });
+      console.log('[Notifications] Registered default and bell_sound_v2 channels with native bell_sound.');
     }
 
     // Save token to Supabase

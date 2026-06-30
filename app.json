@@ -2,7 +2,7 @@
   "expo": {
     "name": "mantrapuja",
     "slug": "mantrapuja",
-    "version": "7.0.0",
+    "version": "8.0.0",
     "orientation": "portrait",
     "icon": "./assets/app_logos/icon.png",
     "scheme": "mantrapuja",
@@ -22,7 +22,7 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.mantrapuja.official",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 7
+      "versionCode": 8
     },
     "web": {
       "output": "static",
@@ -49,7 +49,10 @@
         "expo-notifications",
         {
           "icon": "./assets/app_logos/icon.png",
-          "color": "#FF9500"
+          "color": "#FF9500",
+          "sounds": [
+            "./assets/Sound/bell_sound.mp3"
+          ]
         }
       ]
     ],
