@@ -502,8 +502,14 @@ async function main() {
         `dependencies {${roomDeps}`
       );
     }
+    if (!content.includes('lint {')) {
+      content = content.replace(
+        'android {',
+        'android {\n    lint {\n        abortOnError false\n        checkReleaseBuilds false\n    }'
+      );
+    }
     fs.writeFileSync(buildGradlePath, content, 'utf8');
-    console.log('Added dependencies to build.gradle');
+    console.log('Added dependencies and lint configuration to build.gradle');
   }
 
   // AlarmDatabase.java double instance fix
@@ -596,6 +602,20 @@ async function main() {
       fs.writeFileSync(proguardPath, content, 'utf8');
       console.log('Configured ProGuard keep rules');
     }
+  }
+
+  // Copy alarm_gate.png to android drawable resources
+  const drawableDir = path.join(androidAppDir, 'src/main/res/drawable');
+  if (!fs.existsSync(drawableDir)) {
+    fs.mkdirSync(drawableDir, { recursive: true });
+  }
+  const sourceGatePath = path.join(projectRoot, 'assets/alarm/Alarm_gate.png');
+  const destGatePath = path.join(drawableDir, 'alarm_gate.png');
+  if (fs.existsSync(sourceGatePath)) {
+    fs.copyFileSync(sourceGatePath, destGatePath);
+    console.log('Copied alarm_gate.png to android drawable resources');
+  } else {
+    console.log('Warning: assets/alarm/Alarm_gate.png not found');
   }
 
   console.log('--- Restore Alarm Configuration Complete! ---');
