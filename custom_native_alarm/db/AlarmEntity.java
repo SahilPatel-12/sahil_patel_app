@@ -2,6 +2,10 @@ package com.mantrapuja.official.alarm.db;
 
 import androidx.media3.common.C;
 import com.facebook.react.uimanager.ViewProps;
+import androidx.room.Entity;
+import androidx.room.PrimaryKey;
+import androidx.room.Ignore;
+import androidx.annotation.NonNull;
 
 import kotlin.Metadata;
 import kotlin.jvm.internal.DefaultConstructorMarker;
@@ -10,6 +14,7 @@ import kotlin.jvm.internal.Intrinsics;
 /* compiled from: AlarmEntity.kt */
 
 /* loaded from: classes3.dex */
+@Entity
 public final /* data */ class AlarmEntity {
     private final int autoDismissDuration;
     private final String cloudId;
@@ -20,6 +25,8 @@ public final /* data */ class AlarmEntity {
     private final boolean enabled;
     private final int fadeInDuration;
     private final boolean flashlight;
+    @PrimaryKey
+    @NonNull
     private final String id;
     private final boolean isDownloaded;
     private final String label;
@@ -333,7 +340,7 @@ public final /* data */ class AlarmEntity {
         return "AlarmEntity(id=" + this.id + ", label=" + this.label + ", musicId=" + this.musicId + ", localFilePath=" + this.localFilePath + ", isDownloaded=" + this.isDownloaded + ", downloadVersion=" + this.downloadVersion + ", nextTrigger=" + this.nextTrigger + ", repeatType=" + this.repeatType + ", weekdaysMask=" + this.weekdaysMask + ", enabled=" + this.enabled + ", volume=" + this.volume + ", fadeInDuration=" + this.fadeInDuration + ", vibration=" + this.vibration + ", flashlight=" + this.flashlight + ", autoDismissDuration=" + this.autoDismissDuration + ", snoozeDuration=" + this.snoozeDuration + ", lastTriggered=" + this.lastTriggered + ", triggerCount=" + this.triggerCount + ", missedAlarmCount=" + this.missedAlarmCount + ", latitude=" + this.latitude + ", longitude=" + this.longitude + ", createdAt=" + this.createdAt + ", updatedAt=" + this.updatedAt + ", createdByAppVersion=" + this.createdByAppVersion + ", cloudId=" + this.cloudId + ", syncStatus=" + this.syncStatus + ", lastSync=" + this.lastSync + ", deviceId=" + this.deviceId + ")";
     }
 
-    public AlarmEntity(String id, String label, String musicId, String localFilePath, boolean z, int i, long j, String repeatType, int i2, boolean z2, float f, int i3, boolean z3, boolean z4, int i4, int i5, long j2, int i6, int i7, double d, double d2, long j3, long j4, String createdByAppVersion, String str, String syncStatus, long j5, String str2) {
+    public AlarmEntity(String id, String label, String musicId, String localFilePath, boolean isDownloaded, int downloadVersion, long nextTrigger, String repeatType, int weekdaysMask, boolean enabled, float volume, int fadeInDuration, boolean vibration, boolean flashlight, int autoDismissDuration, int snoozeDuration, long lastTriggered, int triggerCount, int missedAlarmCount, double latitude, double longitude, long createdAt, long updatedAt, String createdByAppVersion, String cloudId, String syncStatus, long lastSync, String deviceId) {
         Intrinsics.checkNotNullParameter(id, "id");
         Intrinsics.checkNotNullParameter(label, "label");
         Intrinsics.checkNotNullParameter(musicId, "musicId");
@@ -345,32 +352,35 @@ public final /* data */ class AlarmEntity {
         this.label = label;
         this.musicId = musicId;
         this.localFilePath = localFilePath;
-        this.isDownloaded = z;
-        this.downloadVersion = i;
-        this.nextTrigger = j;
+        this.isDownloaded = isDownloaded;
+        this.downloadVersion = downloadVersion;
+        this.nextTrigger = nextTrigger;
+        
+        
         this.repeatType = repeatType;
-        this.weekdaysMask = i2;
-        this.enabled = z2;
-        this.volume = f;
-        this.fadeInDuration = i3;
-        this.vibration = z3;
-        this.flashlight = z4;
-        this.autoDismissDuration = i4;
-        this.snoozeDuration = i5;
-        this.lastTriggered = j2;
-        this.triggerCount = i6;
-        this.missedAlarmCount = i7;
-        this.latitude = d;
-        this.longitude = d2;
-        this.createdAt = j3;
-        this.updatedAt = j4;
+        this.weekdaysMask = weekdaysMask;
+        this.enabled = enabled;
+        this.volume = volume;
+        this.fadeInDuration = fadeInDuration;
+        this.vibration = vibration;
+        this.flashlight = flashlight;
+        this.autoDismissDuration = autoDismissDuration;
+        this.snoozeDuration = snoozeDuration;
+        this.lastTriggered = lastTriggered;
+        this.triggerCount = triggerCount;
+        this.missedAlarmCount = missedAlarmCount;
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
         this.createdByAppVersion = createdByAppVersion;
-        this.cloudId = str;
+        this.cloudId = cloudId;
         this.syncStatus = syncStatus;
-        this.lastSync = j5;
-        this.deviceId = str2;
+        this.lastSync = lastSync;
+        this.deviceId = deviceId;
     }
 
+    @Ignore
     public /* synthetic */ AlarmEntity(String str, String str2, String str3, String str4, boolean z, int i, long j, String str5, int i2, boolean z2, float f, int i3, boolean z3, boolean z4, int i4, int i5, long j2, int i6, int i7, double d, double d2, long j3, long j4, String str6, String str7, String str8, long j5, String str9, int i8, DefaultConstructorMarker defaultConstructorMarker) {
         this(str, str2, str3, str4, z, i, j, str5, i2, z2, f, i3, z3, z4, i4, i5, j2, i6, i7, d, d2, j3, j4, str6, (i8 & 16777216) != 0 ? null : str7, (i8 & 33554432) != 0 ? "SYNCED" : str8, (i8 & 67108864) != 0 ? 0L : j5, (i8 & C.BUFFER_FLAG_FIRST_SAMPLE) != 0 ? null : str9);
     }

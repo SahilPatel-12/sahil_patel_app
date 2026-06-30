@@ -2,6 +2,7 @@ package com.mantrapuja.official.alarm.db;
 
 import android.content.Context;
 import androidx.room.Room;
+import androidx.room.Database;
 import androidx.room.RoomDatabase;
 import kotlin.Metadata;
 import kotlin.jvm.internal.DefaultConstructorMarker;
@@ -10,6 +11,7 @@ import kotlin.jvm.internal.Intrinsics;
 /* compiled from: AlarmDatabase.kt */
 
 /* loaded from: classes3.dex */
+@Database(entities = {AlarmEntity.class, AlarmHistoryEntity.class}, version = 1, exportSchema = false)
 public abstract class AlarmDatabase extends RoomDatabase {
 
     /* renamed from: Companion, reason: from kotlin metadata */

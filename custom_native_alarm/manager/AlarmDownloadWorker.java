@@ -71,7 +71,7 @@ public final class AlarmDownloadWorker extends Worker {
                 AlarmEntity updatedAlarm = AlarmEntity.copy$default(
                     alarm, null, null, null, destFile.getAbsolutePath(), true, 
                     0, 0L, null, 0, false, 0.0f, 0, false, false, 
-                    0, 0, 0L, 0, 0, 0.0d, 0.0d, 0L, 0L, null, null, null, 0L, null, 268435439, null
+                    0, 0, 0L, 0, 0, 0.0d, 0.0d, 0L, 0L, null, null, null, 0L, null, 268435431, null
                 );
                 dao.updateAlarm(updatedAlarm);
                 // Reschedule with the new downloaded file path

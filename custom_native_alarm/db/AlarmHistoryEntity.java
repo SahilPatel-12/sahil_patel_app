@@ -2,10 +2,14 @@ package com.mantrapuja.official.alarm.db;
 
 import kotlin.Metadata;
 import kotlin.jvm.internal.Intrinsics;
+import androidx.room.Entity;
+import androidx.room.PrimaryKey;
+import androidx.annotation.NonNull;
 
 /* compiled from: AlarmHistoryEntity.kt */
 
 /* loaded from: classes3.dex */
+@Entity
 public final /* data */ class AlarmHistoryEntity {
     private final String alarmId;
     private final String appVersion;
@@ -13,6 +17,8 @@ public final /* data */ class AlarmHistoryEntity {
     private final long dismissTime;
     private final long durationPlayed;
     private final String failureReason;
+    @PrimaryKey
+    @NonNull
     private final String id;
     private final boolean missed;
     private final long scheduledTime;
@@ -102,20 +108,20 @@ public final /* data */ class AlarmHistoryEntity {
         return "AlarmHistoryEntity(id=" + this.id + ", alarmId=" + this.alarmId + ", scheduledTime=" + this.scheduledTime + ", triggerTime=" + this.triggerTime + ", dismissTime=" + this.dismissTime + ", snoozeCount=" + this.snoozeCount + ", durationPlayed=" + this.durationPlayed + ", completed=" + this.completed + ", missed=" + this.missed + ", failureReason=" + this.failureReason + ", appVersion=" + this.appVersion + ")";
     }
 
-    public AlarmHistoryEntity(String id, String alarmId, long j, long j2, long j3, int i, long j4, boolean z, boolean z2, String str, String appVersion) {
+    public AlarmHistoryEntity(String id, String alarmId, long scheduledTime, long triggerTime, long dismissTime, int snoozeCount, long durationPlayed, boolean completed, boolean missed, String failureReason, String appVersion) {
         Intrinsics.checkNotNullParameter(id, "id");
         Intrinsics.checkNotNullParameter(alarmId, "alarmId");
         Intrinsics.checkNotNullParameter(appVersion, "appVersion");
         this.id = id;
         this.alarmId = alarmId;
-        this.scheduledTime = j;
-        this.triggerTime = j2;
-        this.dismissTime = j3;
-        this.snoozeCount = i;
-        this.durationPlayed = j4;
-        this.completed = z;
-        this.missed = z2;
-        this.failureReason = str;
+        this.scheduledTime = scheduledTime;
+        this.triggerTime = triggerTime;
+        this.dismissTime = dismissTime;
+        this.snoozeCount = snoozeCount;
+        this.durationPlayed = durationPlayed;
+        this.completed = completed;
+        this.missed = missed;
+        this.failureReason = failureReason;
         this.appVersion = appVersion;
     }
 

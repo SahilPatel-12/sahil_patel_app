@@ -82,7 +82,7 @@ public final class AlarmDownloadWorker extends Worker {
                 AlarmEntity updatedAlarm = AlarmEntity.copy$default(
                     alarm, null, null, null, destFile.getAbsolutePath(), true, 
                     0, 0L, null, 0, false, 0.0f, 0, false, false, 
-                    0, 0, 0L, 0, 0, 0.0d, 0.0d, 0L, 0L, null, null, null, 0L, null, 268435439, null
+                    0, 0, 0L, 0, 0, 0.0d, 0.0d, 0L, 0L, null, null, null, 0L, null, 268435431, null
                 );
                 dao.updateAlarm(updatedAlarm);
                 // Reschedule with the new downloaded file path
@@ -263,6 +263,10 @@ async function main() {
           'AudioAttributes build2 = new AudioAttributes.Builder().setUsage(4).setContentType(4).build();',
           'androidx.media3.common.AudioAttributes build2 = new androidx.media3.common.AudioAttributes.Builder().setUsage(4).setContentType(4).build();'
         );
+        content = content.replace(
+          'MediaItem fromUri2 = MediaItem.fromUri(Uri.parse("asset:///Sound/bell_sound.mp3"));',
+          'MediaItem fromUri2 = MediaItem.fromUri(Uri.parse("android.resource://" + this.context.getPackageName() + "/raw/bell_sound"));'
+        );
       } else if (file.endsWith('AlarmBridge.java')) {
         content = content.replace(/Constants\.ScionAnalytics\.PARAM_LABEL/g, '"label"');
         content = content.replace(
@@ -282,12 +286,60 @@ async function main() {
       } else if (file.endsWith('AlarmScheduler.java')) {
         content = content.replace('import androidx.media3.exoplayer.hls.playlist.HlsMediaPlaylist;', '');
         content = content.replace('HlsMediaPlaylist.Interstitial.CUE_TRIGGER_ONCE', '"ONCE"');
+      } else if (file.endsWith('AlarmDatabase.java')) {
+        content = content.replace(
+          'import androidx.room.RoomDatabase;',
+          'import androidx.room.Database;\nimport androidx.room.RoomDatabase;'
+        );
+        content = content.replace(
+          'public abstract class AlarmDatabase extends RoomDatabase {',
+          '@Database(entities = {AlarmEntity.class, AlarmHistoryEntity.class}, version = 1, exportSchema = false)\npublic abstract class AlarmDatabase extends RoomDatabase {'
+        );
+      } else if (file.endsWith('AlarmDao.java')) {
+        content = content.replace(
+          'import java.util.List;',
+          'import java.util.List;\nimport androidx.room.Dao;\nimport androidx.room.Insert;\nimport androidx.room.OnConflictStrategy;\nimport androidx.room.Query;\nimport androidx.room.Update;'
+        );
+        content = content.replace(
+          'public interface AlarmDao {',
+          '@Dao\npublic interface AlarmDao {'
+        );
+        content = content.replace('void deleteAlarm(String id);', '@Query("DELETE FROM AlarmEntity WHERE id = :id")\n    void deleteAlarm(String id);');
+        content = content.replace('AlarmEntity getAlarmById(String id);', '@Query("SELECT * FROM AlarmEntity WHERE id = :id")\n    AlarmEntity getAlarmById(String id);');
+        content = content.replace('List<AlarmEntity> getAlarms();', '@Query("SELECT * FROM AlarmEntity")\n    List<AlarmEntity> getAlarms();');
+        content = content.replace('List<AlarmEntity> getEnabledAlarms();', '@Query("SELECT * FROM AlarmEntity WHERE enabled = 1")\n    List<AlarmEntity> getEnabledAlarms();');
+        content = content.replace('void insertAlarm(AlarmEntity alarm);', '@Insert(onConflict = OnConflictStrategy.REPLACE)\n    void insertAlarm(AlarmEntity alarm);');
+        content = content.replace('void updateAlarm(AlarmEntity alarm);', '@Update\n    void updateAlarm(AlarmEntity alarm);');
+      } else if (file.endsWith('AlarmHistoryDao.java')) {
+        content = content.replace(
+          'import java.util.List;',
+          'import java.util.List;\nimport androidx.room.Dao;\nimport androidx.room.Insert;\nimport androidx.room.OnConflictStrategy;\nimport androidx.room.Query;'
+        );
+        content = content.replace(
+          'public interface AlarmHistoryDao {',
+          '@Dao\npublic interface AlarmHistoryDao {'
+        );
+        content = content.replace('void deleteHistoryBefore(long timestamp);', '@Query("DELETE FROM AlarmHistoryEntity WHERE scheduledTime < :timestamp")\n    void deleteHistoryBefore(long timestamp);');
+        content = content.replace('List<AlarmHistoryEntity> getHistory();', '@Query("SELECT * FROM AlarmHistoryEntity ORDER BY scheduledTime DESC")\n    List<AlarmHistoryEntity> getHistory();');
+        content = content.replace('void insertHistory(AlarmHistoryEntity history);', '@Insert(onConflict = OnConflictStrategy.REPLACE)\n    void insertHistory(AlarmHistoryEntity history);');
       } else if (file.endsWith('AlarmActivity.java')) {
         content = content.replace(
           'str2 = StringsKt.contains$default((CharSequence) alarmById.getLabel(), (CharSequence) "|", false, 2, (Object) null) ? (String) StringsKt.split$default((CharSequence) alarmById.getLabel(), new String[]{"|"}, false, 0, 6, (Object) null).get(0) : alarmById.getLabel();',
           'str2 = alarmById.getLabel().contains("|") ? alarmById.getLabel().split("\\\\|")[0] : alarmById.getLabel();'
         );
       } else if (file.endsWith('AlarmEntity.java')) {
+        content = content.replace(
+          'import com.facebook.react.uimanager.ViewProps;',
+          'import com.facebook.react.uimanager.ViewProps;\nimport androidx.room.Entity;\nimport androidx.room.PrimaryKey;\nimport androidx.room.Ignore;\nimport androidx.annotation.NonNull;'
+        );
+        content = content.replace(
+          'public final /* data */ class AlarmEntity {',
+          '@Entity\npublic final /* data */ class AlarmEntity {'
+        );
+        content = content.replace(
+          'private final String id;',
+          '@PrimaryKey\n    @NonNull\n    private final String id;'
+        );
         let lines = content.split('\n');
         let startIdx = -1;
         let endIdx = -1;
@@ -309,7 +361,53 @@ async function main() {
           /public final String getSyncStatus\(\) \{\s+return this\.syncStatus;\s+\}\s+public final long getLastSync\(\) \{\s+return this\.lastSync;\s+\}\s+public final String getDeviceId\(\) \{\s+return this\.deviceId;\s+\}/g,
           ''
         );
+
+        // Fix AlarmEntity constructor parameter names
+        const oldConstructor = 'public AlarmEntity(String id, String label, String musicId, String localFilePath, boolean z, int i, long j, String repeatType, int i2, boolean z2, float f, int i3, boolean z3, boolean z4, int i4, int i5, long j2, int i6, int i7, double d, double d2, long j3, long j4, String createdByAppVersion, String str, String syncStatus, long j5, String str2) {';
+        const newConstructor = 'public AlarmEntity(String id, String label, String musicId, String localFilePath, boolean isDownloaded, int downloadVersion, long nextTrigger, String repeatType, int weekdaysMask, boolean enabled, float volume, int fadeInDuration, boolean vibration, boolean flashlight, int autoDismissDuration, int snoozeDuration, long lastTriggered, int triggerCount, int missedAlarmCount, double latitude, double longitude, long createdAt, long updatedAt, String createdByAppVersion, String cloudId, String syncStatus, long lastSync, String deviceId) {';
+        content = content.replace(oldConstructor, newConstructor);
+        content = content.replace(
+          'this.isDownloaded = z;',
+          'this.isDownloaded = isDownloaded;\n        this.downloadVersion = downloadVersion;\n        this.nextTrigger = nextTrigger;'
+        );
+        content = content.replace('this.downloadVersion = i;', '');
+        content = content.replace('this.nextTrigger = j;', '');
+        content = content.replace('this.weekdaysMask = i2;', 'this.weekdaysMask = weekdaysMask;');
+        content = content.replace('this.enabled = z2;', 'this.enabled = enabled;');
+        content = content.replace('this.volume = f;', 'this.volume = volume;');
+        content = content.replace('this.fadeInDuration = i3;', 'this.fadeInDuration = fadeInDuration;');
+        content = content.replace('this.vibration = z3;', 'this.vibration = vibration;');
+        content = content.replace('this.flashlight = z4;', 'this.flashlight = flashlight;');
+        content = content.replace('this.autoDismissDuration = i4;', 'this.autoDismissDuration = autoDismissDuration;');
+        content = content.replace('this.snoozeDuration = i5;', 'this.snoozeDuration = snoozeDuration;');
+        content = content.replace('this.lastTriggered = j2;', 'this.lastTriggered = lastTriggered;');
+        content = content.replace('this.triggerCount = i6;', 'this.triggerCount = triggerCount;');
+        content = content.replace('this.missedAlarmCount = i7;', 'this.missedAlarmCount = missedAlarmCount;');
+        content = content.replace('this.latitude = d;', 'this.latitude = latitude;');
+        content = content.replace('this.longitude = d2;', 'this.longitude = longitude;');
+        content = content.replace('this.createdAt = j3;', 'this.createdAt = createdAt;');
+        content = content.replace('this.updatedAt = j4;', 'this.updatedAt = updatedAt;');
+        content = content.replace('this.cloudId = str;', 'this.cloudId = cloudId;');
+        content = content.replace('this.lastSync = j5;', 'this.lastSync = lastSync;');
+        content = content.replace('this.deviceId = str2;', 'this.deviceId = deviceId;');
+
+        content = content.replace(
+          'public /* synthetic */ AlarmEntity(',
+          '@Ignore\n    public /* synthetic */ AlarmEntity('
+        );
       } else if (file.endsWith('AlarmHistoryEntity.java')) {
+        content = content.replace(
+          'import kotlin.jvm.internal.Intrinsics;',
+          'import kotlin.jvm.internal.Intrinsics;\nimport androidx.room.Entity;\nimport androidx.room.PrimaryKey;\nimport androidx.annotation.NonNull;'
+        );
+        content = content.replace(
+          'public final /* data */ class AlarmHistoryEntity {',
+          '@Entity\npublic final /* data */ class AlarmHistoryEntity {'
+        );
+        content = content.replace(
+          'private final String id;',
+          '@PrimaryKey\n    @NonNull\n    private final String id;'
+        );
         let lines = content.split('\n');
         let startIdx = -1;
         for (let i = 0; i < lines.length; i++) {
@@ -323,6 +421,19 @@ async function main() {
           lines.push('}');
         }
         content = lines.join('\n');
+
+        // Fix AlarmHistoryEntity constructor parameter names
+        const oldConstructor = 'public AlarmHistoryEntity(String id, String alarmId, long j, long j2, long j3, int i, long j4, boolean z, boolean z2, String str, String appVersion) {';
+        const newConstructor = 'public AlarmHistoryEntity(String id, String alarmId, long scheduledTime, long triggerTime, long dismissTime, int snoozeCount, long durationPlayed, boolean completed, boolean missed, String failureReason, String appVersion) {';
+        content = content.replace(oldConstructor, newConstructor);
+        content = content.replace('this.scheduledTime = j;', 'this.scheduledTime = scheduledTime;');
+        content = content.replace('this.triggerTime = j2;', 'this.triggerTime = triggerTime;');
+        content = content.replace('this.dismissTime = j3;', 'this.dismissTime = dismissTime;');
+        content = content.replace('this.snoozeCount = i;', 'this.snoozeCount = snoozeCount;');
+        content = content.replace('this.durationPlayed = j4;', 'this.durationPlayed = durationPlayed;');
+        content = content.replace('this.completed = z;', 'this.completed = completed;');
+        content = content.replace('this.missed = z2;', 'this.missed = missed;');
+        content = content.replace('this.failureReason = str;', 'this.failureReason = failureReason;');
       }
 
       fs.writeFileSync(file, content, 'utf8');

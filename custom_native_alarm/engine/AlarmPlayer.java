@@ -97,7 +97,7 @@ public final class AlarmPlayer implements Player.Listener {
             return fromUri;
         }
         Log.w("AlarmPlayer", "Alarm file does not exist at path: " + filePath + ". Using fallback.");
-        MediaItem fromUri2 = MediaItem.fromUri(Uri.parse("asset:///Sound/bell_sound.mp3"));
+        MediaItem fromUri2 = MediaItem.fromUri(Uri.parse("android.resource://" + this.context.getPackageName() + "/raw/bell_sound"));
         Intrinsics.checkNotNull(fromUri2);
         return fromUri2;
     }
