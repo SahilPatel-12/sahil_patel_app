@@ -618,6 +618,17 @@ async function main() {
     console.log('Warning: assets/alarm/Alarm_gate.png not found');
   }
 
+  // Copy custom vector drawables to android drawable resources
+  const backupDrawableDir = path.join(backupDir, 'res/drawable');
+  if (fs.existsSync(backupDrawableDir)) {
+    fs.readdirSync(backupDrawableDir).forEach(file => {
+      if (file.startsWith('ic_alarm_') && file.endsWith('.xml')) {
+        fs.copyFileSync(path.join(backupDrawableDir, file), path.join(drawableDir, file));
+        console.log(`Copied ${file} to android drawable resources`);
+      }
+    });
+  }
+
   console.log('--- Restore Alarm Configuration Complete! ---');
 }
 

@@ -31,6 +31,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import DraggableCalendarButton from "../../components/DraggableCalendarButton";
 import AndroidWheelPicker from "../../components/AndroidWheelPicker";
 import { AlarmSystem } from '../../services/AlarmSystem';
+import { safeStorage } from '../../services/storage';
 import { BlurView } from 'expo-blur';
 import Svg, { Path, Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
@@ -629,10 +630,13 @@ export default function MusicScreen() {
 
       const batteryIgnored = await AlarmSystem.isBatteryOptimizationIgnored();
       if (!batteryIgnored) {
-        setPendingAlarmTrack(track);
-        setPermissionModalType('BATTERY');
-        setIsPermissionModalVisible(true);
-        return;
+        const batteryDismissed = await safeStorage.getItem('battery_warning_dismissed');
+        if (batteryDismissed !== 'true') {
+          setPendingAlarmTrack(track);
+          setPermissionModalType('BATTERY');
+          setIsPermissionModalVisible(true);
+          return;
+        }
       }
 
       setActiveAlarmTrack(track);
@@ -1854,6 +1858,7 @@ export default function MusicScreen() {
                   if (permissionModalType === 'SYSTEM') {
                     await AlarmSystem.requestAlarmPermissions();
                   } else {
+                    await safeStorage.setItem('battery_warning_dismissed', 'true');
                     await AlarmSystem.requestBatteryOptimizationWaiver();
                     // Give a slight delay before showing the alarm config modal for the pending track
                     setTimeout(() => {
@@ -1878,9 +1883,10 @@ export default function MusicScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                onPress={() => {
+                onPress={async () => {
                   setIsPermissionModalVisible(false);
                   if (permissionModalType === 'BATTERY' && pendingAlarmTrack) {
+                    await safeStorage.setItem('battery_warning_dismissed', 'true');
                     // Let the user set the alarm anyway even if battery ignoring is skipped
                     setActiveAlarmTrack(pendingAlarmTrack);
                     setIsAlarmModalVisible(true);
@@ -3417,5 +3423,33 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontSize: 13,
     fontWeight: '600',
+  },
+  restrictedWarningContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
+    gap: 8,
+  },
+  restrictedWarningTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#b45309',
+    marginBottom: 4,
+  },
+  restrictedWarningText: {
+    fontSize: 11,
+    color: '#78350f',
+    lineHeight: 15,
+  },
+  restrictedWarningSteps: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#78350f',
+    lineHeight: 16,
+    marginTop: 4,
   },
 });

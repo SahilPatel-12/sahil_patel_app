@@ -31,7 +31,8 @@ public final class BootReceiver extends BroadcastReceiver {
 
     /* JADX INFO: Access modifiers changed from: private */
     public static final void onReceive$lambda$0(Context context) {
-        List<AlarmEntity> enabledAlarms = AlarmDatabase.INSTANCE.getInstance(context).alarmDao().getEnabledAlarms();
+        AlarmDatabase db = AlarmDatabase.INSTANCE.getInstance(context);
+        List<AlarmEntity> enabledAlarms = db.alarmDao().getEnabledAlarms();
         Log.i("BootReceiver", "Found " + enabledAlarms.size() + " active alarms to restore");
         for (AlarmEntity alarmEntity : enabledAlarms) {
             try {
@@ -40,6 +41,18 @@ public final class BootReceiver extends BroadcastReceiver {
             } catch (Exception e) {
                 Log.e("BootReceiver", "Failed to schedule alarm: " + alarmEntity.getId() + " on boot", e);
             }
+        }
+
+        // Recover interrupted / pending downloads on boot
+        try {
+            List<AlarmEntity> pendingAlarms = db.alarmDao().getPendingAlarms();
+            for (AlarmEntity alarm : pendingAlarms) {
+                if (alarm.getEnabled() && alarm.getDownloadUrl() != null && !alarm.getDownloadUrl().isEmpty()) {
+                    com.mantrapuja.official.alarm.manager.AlarmDownloadManager.INSTANCE.enqueueDownload(context, alarm.getMusicId(), alarm.getDownloadUrl(), alarm.getMd5());
+                }
+            }
+        } catch (Exception e) {
+            Log.e("BootReceiver", "Failed to recover pending downloads on boot", e);
         }
     }
 }

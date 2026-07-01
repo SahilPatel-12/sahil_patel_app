@@ -26,6 +26,12 @@ public interface AlarmDao {
     @Query("SELECT * FROM AlarmEntity WHERE enabled = 1")
     List<AlarmEntity> getEnabledAlarms();
 
+    @Query("SELECT * FROM AlarmEntity WHERE musicId = :musicId")
+    List<AlarmEntity> getAlarmsByMusicId(String musicId);
+
+    @Query("SELECT * FROM AlarmEntity WHERE isDownloaded = 0")
+    List<AlarmEntity> getPendingAlarms();
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insertAlarm(AlarmEntity alarm);
 

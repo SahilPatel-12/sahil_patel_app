@@ -66,7 +66,7 @@ public final class AlarmNotificationManager {
         if (str.length() == 0) {
             str = "Time for your devotional chant";
         }
-        NotificationCompat.Builder addAction = contentTitle.setContentText(str).setPriority(1).setCategory(NotificationCompat.CATEGORY_ALARM).setAutoCancel(false).setOngoing(true).setFullScreenIntent(activity, true).setVisibility(1).addAction(R.drawable.ic_menu_close_clear_cancel, "Dismiss", broadcast).addAction(R.drawable.ic_menu_today, "Snooze (10m)", broadcast2);
+        NotificationCompat.Builder addAction = contentTitle.setContentText(str).setPriority(NotificationCompat.PRIORITY_MAX).setCategory(NotificationCompat.CATEGORY_ALARM).setAutoCancel(false).setOngoing(true).setFullScreenIntent(activity, true).setVisibility(1).addAction(R.drawable.ic_menu_close_clear_cancel, "Dismiss", broadcast).addAction(R.drawable.ic_menu_today, "Snooze (10m)", broadcast2);
         Intrinsics.checkNotNullExpressionValue(addAction, "addAction(...)");
         Notification build = addAction.build();
         Intrinsics.checkNotNullExpressionValue(build, "build(...)");

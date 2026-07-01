@@ -77,13 +77,14 @@ public final class AlarmService extends Service {
         if (alarmPlayer != null) {
             alarmPlayer.play(alarmById.getLocalFilePath(), alarmById.getVolume(), alarmById.getFadeInDuration());
         }
-        if (powerManager.isInteractive()) {
-            return;
-        }
         Intent intent = new Intent(alarmService2, (Class<?>) AlarmActivity.class);
         intent.putExtra("alarm_id", alarmById.getId());
         intent.setFlags(335544320);
-        alarmService.startActivity(intent);
+        try {
+            alarmService.startActivity(intent);
+        } catch (Exception e) {
+            Log.e("AlarmService", "Failed to start AlarmActivity UI directly", e);
+        }
     }
 
     @Override // android.app.Service

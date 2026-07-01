@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { StyleSheet, View, Dimensions, Image } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
 import { safeStorage } from '../services/storage';
 
@@ -32,11 +33,23 @@ export default function SplashScreen() {
       }
 
       try {
+        const initialUrl = await Linking.getInitialURL();
+        console.log('[Splash] Initial launch URL:', initialUrl);
+        const isGodLink = initialUrl && (initialUrl.includes('//god') || initialUrl.includes('/god'));
+
         const session = await safeStorage.getItem('user_session');
         if (session) {
-          router.replace('/(tabs)/home');
+          if (isGodLink) {
+            router.replace('/(tabs)/god');
+          } else {
+            router.replace('/(tabs)/home');
+          }
         } else {
-          router.replace('/login');
+          if (isGodLink) {
+            router.replace('/(tabs)/god');
+          } else {
+            router.replace('/login');
+          }
         }
       } catch (err) {
         console.error('Error checking user session:', err);

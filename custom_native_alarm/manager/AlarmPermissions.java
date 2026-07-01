@@ -31,4 +31,12 @@ public final class AlarmPermissions {
         Intrinsics.checkNotNullParameter(context, "context");
         return NotificationManagerCompat.from(context).areNotificationsEnabled();
     }
+
+    public final boolean canDrawOverlays(Context context) {
+        Intrinsics.checkNotNullParameter(context, "context");
+        if (Build.VERSION.SDK_INT >= 23) {
+            return android.provider.Settings.canDrawOverlays(context);
+        }
+        return true;
+    }
 }

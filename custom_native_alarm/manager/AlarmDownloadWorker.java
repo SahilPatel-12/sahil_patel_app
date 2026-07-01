@@ -24,19 +24,19 @@ public final class AlarmDownloadWorker extends Worker {
 
     @Override
     public Result doWork() {
-        String id = getInputData().getString("id");
+        String musicId = getInputData().getString("musicId");
         String downloadUrl = getInputData().getString("url");
         String md5 = getInputData().getString("md5");
 
-        if (id == null || downloadUrl == null) {
+        if (musicId == null || downloadUrl == null) {
             return Result.failure();
         }
 
-        Log.i("AlarmDownloadWorker", "Starting download for alarm ID: " + id + " from URL: " + downloadUrl);
+        Log.i("AlarmDownloadWorker", "Starting download for music ID: " + musicId + " from URL: " + downloadUrl);
 
         try {
             Context context = getApplicationContext();
-            File destFile = new File(context.getFilesDir(), "alarm_" + id + ".mp3");
+            File destFile = new File(context.getFilesDir(), "chant_" + musicId + ".mp3");
 
             // Download file
             URL url = new URL(downloadUrl);
@@ -51,36 +51,51 @@ public final class AlarmDownloadWorker extends Worker {
             fos.close();
             is.close();
 
-            Log.i("AlarmDownloadWorker", "Download complete for alarm ID: " + id);
+            Log.i("AlarmDownloadWorker", "Download complete for music ID: " + musicId);
 
             // Verify MD5 if provided
             if (md5 != null && md5.trim().length() > 0) {
                 String calculatedMd5 = calculateFileMd5(destFile);
                 if (!calculatedMd5.equalsIgnoreCase(md5)) {
-                    Log.e("AlarmDownloadWorker", "MD5 mismatch for alarm ID: " + id + ". Expected: " + md5 + ", Got: " + calculatedMd5);
+                    Log.e("AlarmDownloadWorker", "MD5 mismatch for music ID: " + musicId + ". Expected: " + md5 + ", Got: " + calculatedMd5);
                     destFile.delete();
                     return Result.failure();
                 }
             }
 
-            // Update database
+            // Update database for all alarms using this musicId
             AlarmDatabase db = AlarmDatabase.INSTANCE.getInstance(context);
             AlarmDao dao = db.alarmDao();
-            AlarmEntity alarm = dao.getAlarmById(id);
-            if (alarm != null) {
+            java.util.List<AlarmEntity> alarms = dao.getAlarmsByMusicId(musicId);
+            for (AlarmEntity alarm : alarms) {
                 AlarmEntity updatedAlarm = AlarmEntity.copy$default(
                     alarm, null, null, null, destFile.getAbsolutePath(), true, 
                     0, 0L, null, 0, false, 0.0f, 0, false, false, 
                     0, 0, 0L, 0, 0, 0.0d, 0.0d, 0L, 0L, null, null, null, 0L, null, 268435431, null
                 );
+                updatedAlarm.setDownloadStatus("SUCCESS");
                 dao.updateAlarm(updatedAlarm);
-                // Reschedule with the new downloaded file path
+                // Reschedule to ensure AlarmManager state is clean
                 AlarmScheduler.INSTANCE.scheduleAlarm(context, updatedAlarm);
             }
 
             return Result.success();
         } catch (Exception e) {
-            Log.e("AlarmDownloadWorker", "Failed to download alarm file for ID: " + id, e);
+            Log.e("AlarmDownloadWorker", "Failed to download alarm file for music ID: " + musicId, e);
+            try {
+                Context context = getApplicationContext();
+                AlarmDatabase db = AlarmDatabase.INSTANCE.getInstance(context);
+                AlarmDao dao = db.alarmDao();
+                java.util.List<AlarmEntity> alarms = dao.getAlarmsByMusicId(musicId);
+                for (AlarmEntity alarm : alarms) {
+                    if (!alarm.isDownloaded()) {
+                        alarm.setDownloadStatus("FAILED");
+                        dao.updateAlarm(alarm);
+                    }
+                }
+            } catch (Exception dbEx) {
+                Log.e("AlarmDownloadWorker", "Failed to update failure status in DB", dbEx);
+            }
             return Result.retry();
         }
     }

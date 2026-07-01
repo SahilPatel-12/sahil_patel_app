@@ -24,12 +24,12 @@ public final class AlarmDownloadManager {
     private AlarmDownloadManager() {
     }
 
-    public final void enqueueDownload(Context context, String id, String url, String md5) {
+    public final void enqueueDownload(Context context, String musicId, String url, String md5) {
         Intrinsics.checkNotNullParameter(context, "context");
-        Intrinsics.checkNotNullParameter(id, "id");
+        Intrinsics.checkNotNullParameter(musicId, "musicId");
         Intrinsics.checkNotNullParameter(url, "url");
         Constraints build = new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
-        Pair[] pairArr = {TuplesKt.to("id", id), TuplesKt.to("url", url), TuplesKt.to("md5", md5)};
+        Pair[] pairArr = {TuplesKt.to("musicId", musicId), TuplesKt.to("url", url), TuplesKt.to("md5", md5)};
         Data.Builder builder = new Data.Builder();
         for (int i = 0; i < 3; i++) {
             Pair pair = pairArr[i];
@@ -37,12 +37,12 @@ public final class AlarmDownloadManager {
         }
         Data build2 = builder.build();
         Intrinsics.checkNotNullExpressionValue(build2, "dataBuilder.build()");
-        WorkManager.getInstance(context.getApplicationContext()).enqueueUniqueWork(id, ExistingWorkPolicy.REPLACE, new OneTimeWorkRequest.Builder(AlarmDownloadWorker.class).setConstraints(build).setInputData(build2).setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10L, TimeUnit.SECONDS).build());
+        WorkManager.getInstance(context.getApplicationContext()).enqueueUniqueWork("download_chant_" + musicId, ExistingWorkPolicy.KEEP, new OneTimeWorkRequest.Builder(AlarmDownloadWorker.class).setConstraints(build).setInputData(build2).setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10L, TimeUnit.SECONDS).build());
     }
 
-    public final void cancelDownload(Context context, String id) {
+    public final void cancelDownload(Context context, String musicId) {
         Intrinsics.checkNotNullParameter(context, "context");
-        Intrinsics.checkNotNullParameter(id, "id");
-        WorkManager.getInstance(context.getApplicationContext()).cancelUniqueWork(id);
+        Intrinsics.checkNotNullParameter(musicId, "musicId");
+        WorkManager.getInstance(context.getApplicationContext()).cancelUniqueWork("download_chant_" + musicId);
     }
 }

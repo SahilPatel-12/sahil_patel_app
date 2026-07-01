@@ -49,7 +49,7 @@ public final class AlarmScheduler {
     public final void scheduleAlarm(final Context context, AlarmEntity alarm) {
         Intrinsics.checkNotNullParameter(context, "context");
         Intrinsics.checkNotNullParameter(alarm, "alarm");
-        if (!alarm.getEnabled() || !alarm.isDownloaded()) {
+        if (!alarm.getEnabled()) {
             cancelAlarm(context, alarm.getId());
             return;
         }

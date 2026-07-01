@@ -31,10 +31,28 @@ public final class AlarmBridge extends ReactContextBaseJavaModule {
     private final ReactApplicationContext reactContext;
 
     /* JADX WARN: 'super' call moved to the top of the method (can break code semantics) */
-    public AlarmBridge(ReactApplicationContext reactContext) {
+    public AlarmBridge(final ReactApplicationContext reactContext) {
         super(reactContext);
         Intrinsics.checkNotNullParameter(reactContext, "reactContext");
         this.reactContext = reactContext;
+
+        // Startup Recovery: automatic scan for enabled and pending downloads
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    android.content.Context context = reactContext.getApplicationContext();
+                    java.util.List<AlarmEntity> pendingAlarms = AlarmDatabase.INSTANCE.getInstance(context).alarmDao().getPendingAlarms();
+                    for (AlarmEntity alarm : pendingAlarms) {
+                        if (alarm.getEnabled() && alarm.getDownloadUrl() != null && !alarm.getDownloadUrl().isEmpty()) {
+                            AlarmDownloadManager.INSTANCE.enqueueDownload(context, alarm.getMusicId(), alarm.getDownloadUrl(), alarm.getMd5());
+                        }
+                    }
+                } catch (Exception e) {
+                    Log.e("AlarmBridge", "Failed to run startup download recovery", e);
+                }
+            }
+        }).start();
     }
 
     @Override // com.facebook.react.bridge.NativeModule
@@ -78,11 +96,30 @@ public final class AlarmBridge extends ReactContextBaseJavaModule {
             Intrinsics.checkNotNull(string2);
             Intrinsics.checkNotNull(string3);
             Intrinsics.checkNotNull(string5);
-            AlarmDatabase.INSTANCE.getInstance(alarmBridge.reactContext).alarmDao().insertAlarm(new AlarmEntity(string, string2, string3, "", false, 1, j, string5, i, true, optDouble, optInt, optBoolean, optBoolean2, optInt2, optInt3, 0L, 0, 0, optDouble2, optDouble3, System.currentTimeMillis(), System.currentTimeMillis(), "5.0.0", null, null, 0L, null, 251658240, null));
-            AlarmDownloadManager alarmDownloadManager = AlarmDownloadManager.INSTANCE;
-            ReactApplicationContext reactApplicationContext = alarmBridge.reactContext;
-            Intrinsics.checkNotNull(string4);
-            alarmDownloadManager.enqueueDownload(reactApplicationContext, string, string4, optString);
+
+            // Cache Lookup & Validation
+            java.io.File cachedFile = new java.io.File(alarmBridge.reactContext.getFilesDir(), "chant_" + string3 + ".mp3");
+            boolean isCached = cachedFile.exists() && cachedFile.length() > 0;
+            String localPath = isCached ? cachedFile.getAbsolutePath() : "";
+            String downloadStatus = isCached ? "SUCCESS" : "PENDING";
+
+            AlarmEntity alarm = new AlarmEntity(string, string2, string3, localPath, isCached, 1, j, string5, i, true, optDouble, optInt, optBoolean, optBoolean2, optInt2, optInt3, 0L, 0, 0, optDouble2, optDouble3, System.currentTimeMillis(), System.currentTimeMillis(), "5.0.0", null, null, 0L, null, 251658240, null);
+            alarm.setDownloadUrl(string4);
+            alarm.setMd5(optString);
+            alarm.setDownloadStatus(downloadStatus);
+
+            AlarmDatabase.INSTANCE.getInstance(alarmBridge.reactContext).alarmDao().insertAlarm(alarm);
+
+            // Decoupled Scheduling: Schedule immediately!
+            AlarmScheduler.INSTANCE.scheduleAlarm(alarmBridge.reactContext, alarm);
+
+            // Cache Reuse & Background Download Queueing
+            if (!isCached) {
+                AlarmDownloadManager alarmDownloadManager = AlarmDownloadManager.INSTANCE;
+                ReactApplicationContext reactApplicationContext = alarmBridge.reactContext;
+                Intrinsics.checkNotNull(string4);
+                alarmDownloadManager.enqueueDownload(reactApplicationContext, string3, string4, optString);
+            }
             promise.resolve(true);
         } catch (Exception e) {
             Log.e("AlarmBridge", "Failed to create alarm", e);
@@ -153,9 +190,46 @@ public final class AlarmBridge extends ReactContextBaseJavaModule {
     /* JADX INFO: Access modifiers changed from: private */
     public static final void deleteAlarm$lambda$2(AlarmBridge alarmBridge, String str, Promise promise) {
         try {
+            AlarmDatabase companion = AlarmDatabase.INSTANCE.getInstance(alarmBridge.reactContext);
+            AlarmDao alarmDao = companion.alarmDao();
+            AlarmEntity alarm = alarmDao.getAlarmById(str);
+
             AlarmScheduler.INSTANCE.cancelAlarm(alarmBridge.reactContext, str);
-            AlarmDownloadManager.INSTANCE.cancelDownload(alarmBridge.reactContext, str);
-            AlarmDatabase.INSTANCE.getInstance(alarmBridge.reactContext).alarmDao().deleteAlarm(str);
+
+            if (alarm != null) {
+                String musicId = alarm.getMusicId();
+                String localFilePath = alarm.getLocalFilePath();
+
+                // Delete database record first
+                alarmDao.deleteAlarm(str);
+
+                // Reference count check to safely delete cached file and clean up
+                if (musicId != null && !musicId.isEmpty()) {
+                    java.util.List<AlarmEntity> remaining = alarmDao.getAlarmsByMusicId(musicId);
+                    
+                    // Cancel download if no other alarms are pending for this musicId
+                    java.util.List<AlarmEntity> remainingPending = new java.util.ArrayList<>();
+                    for (AlarmEntity a : remaining) {
+                        if (!a.isDownloaded()) {
+                            remainingPending.add(a);
+                        }
+                    }
+                    if (remainingPending.isEmpty()) {
+                        AlarmDownloadManager.INSTANCE.cancelDownload(alarmBridge.reactContext, musicId);
+                    }
+
+                    // Delete file only when no other alarms reference it
+                    if (remaining.isEmpty() && localFilePath != null && !localFilePath.isEmpty()) {
+                        java.io.File file = new java.io.File(localFilePath);
+                        if (file.exists()) {
+                            boolean deleted = file.delete();
+                            Log.i("AlarmBridge", "Deleted orphaned cache file: " + localFilePath + " (result: " + deleted + ")");
+                        }
+                    }
+                }
+            } else {
+                alarmDao.deleteAlarm(str);
+            }
             promise.resolve(true);
         } catch (Exception e) {
             promise.reject("DELETE_ERROR", e.getMessage());
@@ -178,19 +252,24 @@ public final class AlarmBridge extends ReactContextBaseJavaModule {
     public static final void enableAlarm$lambda$3(AlarmBridge alarmBridge, String str, boolean z, Promise promise) {
         try {
             AlarmDatabase companion = AlarmDatabase.INSTANCE.getInstance(alarmBridge.reactContext);
-            AlarmEntity alarmById = companion.alarmDao().getAlarmById(str);
+            AlarmDao alarmDao = companion.alarmDao();
+            AlarmEntity alarmById = alarmDao.getAlarmById(str);
             if (alarmById != null) {
                 AlarmEntity copy$default = AlarmEntity.copy$default(alarmById, null, null, null, null, false, 0, 0L, null, 0, z, 0.0f, 0, false, false, 0, 0, 0L, 0, 0, 0.0d, 0.0d, 0L, System.currentTimeMillis(), null, null, null, 0L, null, 264240639, null);
-                companion.alarmDao().updateAlarm(copy$default);
+                alarmDao.updateAlarm(copy$default);
                 if (z) {
                     AlarmScheduler.INSTANCE.scheduleAlarm(alarmBridge.reactContext, copy$default);
+                    // Toggle Recovery: Trigger download check on enabling if missing
+                    if (!copy$default.isDownloaded() && copy$default.getDownloadUrl() != null && !copy$default.getDownloadUrl().isEmpty()) {
+                        AlarmDownloadManager.INSTANCE.enqueueDownload(alarmBridge.reactContext, copy$default.getMusicId(), copy$default.getDownloadUrl(), copy$default.getMd5());
+                    }
                 } else {
                     AlarmScheduler.INSTANCE.cancelAlarm(alarmBridge.reactContext, str);
                 }
                 promise.resolve(true);
                 return;
             }
-            promise.reject("NOT_FOUND", "Alarm not found");
+             promise.reject("NOT_FOUND", "Alarm not found");
         } catch (Exception e) {
             promise.reject("ENABLE_ERROR", e.getMessage());
         }
@@ -253,17 +332,61 @@ public final class AlarmBridge extends ReactContextBaseJavaModule {
     @ReactMethod
     public final void checkAlarmPermissions(Promise promise) {
         Intrinsics.checkNotNullParameter(promise, "promise");
-        promise.resolve(Boolean.valueOf(AlarmPermissions.INSTANCE.canScheduleExactAlarms(this.reactContext) && AlarmPermissions.INSTANCE.areNotificationsEnabled(this.reactContext)));
+        boolean hasExact = AlarmPermissions.INSTANCE.canScheduleExactAlarms(this.reactContext);
+        boolean hasNotif = AlarmPermissions.INSTANCE.areNotificationsEnabled(this.reactContext);
+        promise.resolve(Boolean.valueOf(hasExact && hasNotif));
     }
 
     @ReactMethod
     public final void requestAlarmPermissions(Promise promise) {
         Intrinsics.checkNotNullParameter(promise, "promise");
-        if (Build.VERSION.SDK_INT >= 31) {
-            Intent intent = new Intent("android.settings.REQUEST_SCHEDULE_EXACT_ALARM");
-            intent.setFlags(268435456);
-            this.reactContext.startActivity(intent);
+        android.content.Context context = this.reactContext;
+        android.app.Activity activity = getCurrentActivity();
+
+        boolean needNotif = !AlarmPermissions.INSTANCE.areNotificationsEnabled(context);
+        boolean needExact = !AlarmPermissions.INSTANCE.canScheduleExactAlarms(context);
+
+        // 1. Request POST_NOTIFICATIONS runtime permission if SDK >= 33
+        if (needNotif) {
+            if (Build.VERSION.SDK_INT >= 33 && activity != null) {
+                try {
+                    activity.requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 101);
+                } catch (Exception e) {
+                    Log.e("AlarmBridge", "Failed to request notification permission via activity", e);
+                }
+            } else {
+                Intent intent = new Intent();
+                if (Build.VERSION.SDK_INT >= 26) {
+                    intent.setAction("android.settings.APP_NOTIFICATION_SETTINGS");
+                    intent.putExtra("android.provider.extra.APP_PACKAGE", context.getPackageName());
+                } else {
+                    intent.setAction("android.settings.APPLICATION_DETAILS_SETTINGS");
+                    intent.setData(android.net.Uri.fromParts("package", context.getPackageName(), null));
+                }
+                intent.setFlags(268435456);
+                context.startActivity(intent);
+            }
         }
+
+        // 2. Request exact alarm permission
+        if (needExact) {
+            if (Build.VERSION.SDK_INT >= 31) {
+                Intent intent = new Intent("android.settings.REQUEST_SCHEDULE_EXACT_ALARM");
+                intent.setData(android.net.Uri.fromParts("package", context.getPackageName(), null));
+                intent.setFlags(268435456);
+                try {
+                    context.startActivity(intent);
+                } catch (Exception e) {
+                    try {
+                        intent.setData(null);
+                        context.startActivity(intent);
+                    } catch (Exception ex) {
+                        Log.e("AlarmBridge", "Failed to open exact alarm settings", ex);
+                    }
+                }
+            }
+        }
+
         promise.resolve(true);
     }
 }

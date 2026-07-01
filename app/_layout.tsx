@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts, Outfit_400Regular, Outfit_600SemiBold, Outfit_700Bold, Outfit_800ExtraBold } from '@expo-google-fonts/outfit';
 import { DrawerProvider } from "../context/DrawerContext";
@@ -14,6 +14,7 @@ import { registerForPushNotificationsAsync, registerNotificationListeners } from
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  const router = useRouter();
   const [loaded, error] = useFonts({
     'Outfit-Regular': Outfit_400Regular,
     'Outfit-SemiBold': Outfit_600SemiBold,
@@ -44,6 +45,12 @@ export default function RootLayout() {
           const code = parsed.queryParams.code as string;
           console.log('[Deep Linking] Saving pending referral code:', code);
           await safeStorage.setItem('pending_referral_code', code);
+        }
+
+        // Navigate to the God/Darshan tab if deep link contains god
+        if (url.includes('/god') || url.includes('//god')) {
+          console.log('[Deep Linking] Redirecting to god tab...');
+          router.replace('/(tabs)/god');
         }
       } catch (err) {
         console.warn('Error parsing deep link:', err);

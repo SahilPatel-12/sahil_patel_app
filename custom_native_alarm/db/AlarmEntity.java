@@ -163,7 +163,11 @@ public final /* data */ class AlarmEntity {
             str17 = str21;
             z8 = z9;
         }
-        return alarmEntity.copy(str23, str15, str16, str17, z8, i11, j9, str14, i12, z5, f2, i13, z6, z7, i14, i15, j10, i9, i10, d3, d4, j7, j8, str11, str12, str13, j6, str10);
+        AlarmEntity copy = alarmEntity.copy(str23, str15, str16, str17, z8, i11, j9, str14, i12, z5, f2, i13, z6, z7, i14, i15, j10, i9, i10, d3, d4, j7, j8, str11, str12, str13, j6, str10);
+        copy.setDownloadUrl(alarmEntity.getDownloadUrl());
+        copy.setMd5(alarmEntity.getMd5());
+        copy.setDownloadStatus(alarmEntity.getDownloadStatus());
+        return copy;
     }
 
     /* renamed from: component1, reason: from getter */
@@ -314,7 +318,11 @@ public final /* data */ class AlarmEntity {
         Intrinsics.checkNotNullParameter(repeatType, "repeatType");
         Intrinsics.checkNotNullParameter(createdByAppVersion, "createdByAppVersion");
         Intrinsics.checkNotNullParameter(syncStatus, "syncStatus");
-        return new AlarmEntity(id, label, musicId, localFilePath, isDownloaded, downloadVersion, nextTrigger, repeatType, weekdaysMask, enabled, volume, fadeInDuration, vibration, flashlight, autoDismissDuration, snoozeDuration, lastTriggered, triggerCount, missedAlarmCount, latitude, longitude, createdAt, updatedAt, createdByAppVersion, cloudId, syncStatus, lastSync, deviceId);
+        AlarmEntity copy = new AlarmEntity(id, label, musicId, localFilePath, isDownloaded, downloadVersion, nextTrigger, repeatType, weekdaysMask, enabled, volume, fadeInDuration, vibration, flashlight, autoDismissDuration, snoozeDuration, lastTriggered, triggerCount, missedAlarmCount, latitude, longitude, createdAt, updatedAt, createdByAppVersion, cloudId, syncStatus, lastSync, deviceId);
+        copy.setDownloadUrl(this.getDownloadUrl());
+        copy.setMd5(this.getMd5());
+        copy.setDownloadStatus(this.getDownloadStatus());
+        return copy;
     }
 
     public boolean equals(Object other) {
@@ -379,6 +387,19 @@ public final /* data */ class AlarmEntity {
         this.lastSync = lastSync;
         this.deviceId = deviceId;
     }
+
+    private String downloadUrl = "";
+    private String md5 = "";
+    private String downloadStatus = "PENDING";
+
+    public String getDownloadUrl() { return this.downloadUrl; }
+    public void setDownloadUrl(String downloadUrl) { this.downloadUrl = downloadUrl; }
+
+    public String getMd5() { return this.md5; }
+    public void setMd5(String md5) { this.md5 = md5; }
+
+    public String getDownloadStatus() { return this.downloadStatus; }
+    public void setDownloadStatus(String downloadStatus) { this.downloadStatus = downloadStatus; }
 
     @Ignore
     public /* synthetic */ AlarmEntity(String str, String str2, String str3, String str4, boolean z, int i, long j, String str5, int i2, boolean z2, float f, int i3, boolean z3, boolean z4, int i4, int i5, long j2, int i6, int i7, double d, double d2, long j3, long j4, String str6, String str7, String str8, long j5, String str9, int i8, DefaultConstructorMarker defaultConstructorMarker) {
